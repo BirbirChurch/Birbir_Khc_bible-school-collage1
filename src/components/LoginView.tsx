@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { LogIn, Shield, Award, User, GraduationCap, Lock, Cloud } from 'lucide-react';
+import { LogIn, Shield, Award, User, GraduationCap, Lock, Cloud, Key, Eye, EyeOff } from 'lucide-react';
 import { CurrentUser, ProgramType, Student, UserRole } from '../types.ts';
 import { FirebaseConnectionReport } from '../services/firebaseSync.ts';
 import { CHURCH_LOGO } from '../assets/logo.ts';
-import { DEFAULT_TEACHER_KEYS } from '../data/initialData.ts';
+import { DEFAULT_TEACHER_KEYS, generateTeacherKey } from '../data/initialData.ts';
 
 interface LoginViewProps {
   students: Student[];
@@ -32,9 +32,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
 }) => {
   const [role, setRole] = useState<UserRole>('STUDENT');
   const [studentProgram, setStudentProgram] = useState<ProgramType>('Diploma');
-  const [selectedTeacher, setSelectedTeacher] = useState<string>(teachers[0] || '');
   const [studentId, setStudentId] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +51,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
         return;
       }
 
-      const found = students.find(
-        (s) => s.id === cleanId && s.program === studentProgram
-      ) || students.find((s) => s.id === cleanId);
+      const found =
+        students.find((s) => s.id === cleanId && s.program === studentProgram) ||
+        students.find((s) => s.id === cleanId);
 
       if (!found) {
         showNotify(`የተሳሳተ የተማሪ መለያ ኮድ (${cleanId})! እባክዎ እንደገና ይሞክሩ።`, 'error');
@@ -79,30 +79,62 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     if (role === 'TEACHER') {
-      // Check if Admin has locked this teacher's account
-      const isTeacherLocked = userPasswords['_locked_' + selectedTeacher] === 'true';
-      if (isTeacherLocked) {
-        showNotify(`የ${selectedTeacher} መግቢያ በዋና አድሚን ለጊዜው ታግዷል! እባክዎ ዋና አድሚኑን ያነጋግሩ።`, 'error');
+      const cleanKey = password.trim();
+      if (!cleanKey) {
+        showNotify('እባክዎ የመምህር የመግቢያ ቁልፍዎን ያስገቡ!', 'error');
         return;
       }
 
-      const expectedPassword = userPasswords[selectedTeacher] || DEFAULT_TEACHER_KEYS[selectedTeacher];
-      if (!expectedPassword || password.trim() !== expectedPassword.trim()) {
-        showNotify('የተሳሳተ የመምህር የመግቢያ ቁልፍ! ዋና አድሚኑ ያዘጋጁልዎትን ቁልፍ ያስገቡ።', 'error');
+      // Match the key to a registered teacher - no teacher name is selected on the dashboard
+      let matchedTeacher: string | undefined;
+
+      // 1. Direct check in userPasswords dictionary
+      for (const t of teachers) {
+        if (t.includes('—')) continue;
+        const assignedKey = userPasswords[t] || DEFAULT_TEACHER_KEYS[t];
+        if (assignedKey && assignedKey.trim().toLowerCase() === cleanKey.toLowerCase()) {
+          matchedTeacher = t;
+          break;
+        }
+      }
+
+      // 2. Also check generated key algorithm if not yet initialized in userPasswords
+      if (!matchedTeacher) {
+        teachers.forEach((t, idx) => {
+          if (!t.includes('—')) {
+            const genKey = generateTeacherKey(t, idx + 1);
+            if (genKey.toLowerCase() === cleanKey.toLowerCase()) {
+              matchedTeacher = t;
+            }
+          }
+        });
+      }
+
+      if (!matchedTeacher) {
+        showNotify('የተሳሳተ የመምህር የመግቢያ ቁልፍ! እባክዎ ዋና አድሚኑ ያዘጋጁልዎትን ቁልፍ ያስገቡ።', 'error');
         return;
       }
+
+      // Check if Admin has locked this teacher's account
+      const isTeacherLocked = userPasswords['_locked_' + matchedTeacher] === 'true';
+      if (isTeacherLocked) {
+        showNotify(`ይህ የመምህር መለያ በዋና አድሚን ለጊዜው ታግዷል! እባክዎ ዋና አድሚኑን ያነጋግሩ።`, 'error');
+        return;
+      }
+
       onLogin({
         role: 'TEACHER',
-        id: selectedTeacher,
-        name: selectedTeacher
+        id: matchedTeacher,
+        name: matchedTeacher
       });
-      showNotify(`እንኳን ደህና መጡ ${selectedTeacher}!`, 'success');
+      showNotify(`በስኬት ገብተዋል! እንኳን ደህና መጡ!`, 'success');
       return;
     }
 
     // ADMIN, DEAN, REGISTRAR
     const roleKey = role.toLowerCase();
-    const expectedPassword = userPasswords[roleKey] || (role === 'ADMIN' ? 'admin123' : role === 'DEAN' ? 'dean123' : 'reg123');
+    const expectedPassword =
+      userPasswords[roleKey] || (role === 'ADMIN' ? 'admin123' : role === 'DEAN' ? 'dean123' : 'reg123');
 
     if (password !== expectedPassword) {
       showNotify('የተሳሳተ የይለፍ ቃል!', 'error');
@@ -143,7 +175,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </p>
         </div>
 
-        {/* Clean Form Body (Zero password hints or demo notes) */}
+        {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-5">
           {/* Role selector tabs */}
           <div>
@@ -153,7 +185,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="grid grid-cols-5 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
               <button
                 type="button"
-                onClick={() => { setRole('STUDENT'); setPassword(''); }}
+                onClick={() => {
+                  setRole('STUDENT');
+                  setPassword('');
+                }}
                 className={`py-2 px-1 text-center rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-1 cursor-pointer ${
                   role === 'STUDENT'
                     ? 'bg-emerald-800 text-white shadow-sm'
@@ -165,7 +200,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => { setRole('TEACHER'); setPassword(''); }}
+                onClick={() => {
+                  setRole('TEACHER');
+                  setPassword('');
+                }}
                 className={`py-2 px-1 text-center rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-1 cursor-pointer ${
                   role === 'TEACHER'
                     ? 'bg-emerald-800 text-white shadow-sm'
@@ -177,7 +215,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => { setRole('REGISTRAR'); setPassword(''); }}
+                onClick={() => {
+                  setRole('REGISTRAR');
+                  setPassword('');
+                }}
                 className={`py-2 px-1 text-center rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-1 cursor-pointer ${
                   role === 'REGISTRAR'
                     ? 'bg-emerald-800 text-white shadow-sm'
@@ -189,7 +230,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => { setRole('DEAN'); setPassword(''); }}
+                onClick={() => {
+                  setRole('DEAN');
+                  setPassword('');
+                }}
                 className={`py-2 px-1 text-center rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-1 cursor-pointer ${
                   role === 'DEAN'
                     ? 'bg-emerald-800 text-white shadow-sm'
@@ -201,7 +245,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => { setRole('ADMIN'); setPassword(''); }}
+                onClick={() => {
+                  setRole('ADMIN');
+                  setPassword('');
+                }}
                 className={`py-2 px-1 text-center rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-1 cursor-pointer ${
                   role === 'ADMIN'
                     ? 'bg-emerald-800 text-white shadow-sm'
@@ -213,26 +260,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
             </div>
           </div>
-
-          {/* Teacher Selection */}
-          {role === 'TEACHER' && (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                መምህር ይምረጡ
-              </label>
-              <select
-                value={selectedTeacher}
-                onChange={(e) => setSelectedTeacher(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-700 focus:border-emerald-700 bg-slate-50 font-medium cursor-pointer"
-              >
-                {teachers.filter(t => !t.includes('—')).map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {/* Student ID & Program input */}
           {role === 'STUDENT' && (
@@ -283,34 +310,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
           )}
 
-          {/* Password Input for all roles */}
+          {/* Passkey / Password Input for all roles */}
           <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-xs font-bold text-slate-700">
-                {role === 'TEACHER' ? 'የመምህር የመግቢያ ቁልፍ (Passkey)' : 'የይለፍ ቃል (Password)'}
-              </label>
-              {role === 'TEACHER' && (
-                <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                  በአድሚን የሚሰጥ
-                </span>
-              )}
-            </div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              {role === 'TEACHER' ? 'የመምህር የመግቢያ ቁልፍ (Passkey)' : 'የይለፍ ቃል (Password)'}
+            </label>
             <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={role === 'TEACHER' ? 'ለምሳሌ: BK-SOL-2019' : '••••••••'}
-                className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-700 focus:border-emerald-700 bg-slate-50 font-mono"
+                placeholder={role === 'TEACHER' ? 'የመምህር ቁልፍዎን ያስገቡ...' : '••••••••'}
+                className="w-full px-3.5 py-2.5 pr-10 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-700 focus:border-emerald-700 bg-slate-50 font-mono tracking-wider"
                 required
               />
-              <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5 pointer-events-none" />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                title={showPassword ? 'ደብቅ' : 'አሳይ'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
-            {role === 'TEACHER' && (
-              <p className="text-[11px] text-slate-500 mt-1">
-                የመግቢያ ቁልፍዎን ከዋና አድሚኑ ወስደው እዚህ ያስገቡ።
-              </p>
-            )}
           </div>
 
           {/* Submit Button */}
@@ -321,31 +343,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <LogIn className="w-4 h-4" />
             <span>ወደ ሲስተሙ ግባ</span>
           </button>
-
-          {/* Firebase Connection Quick Info */}
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={onOpenFirebaseModal}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
-                firebaseReport?.status === 'connected'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                  : isTestingFirebase
-                  ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                  : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
-              }`}
-            >
-              <Cloud className="w-3.5 h-3.5" />
-              <span>
-                Firebase Cloud ሁኔታ፦{' '}
-                {firebaseReport?.status === 'connected'
-                  ? 'ተገናኝቷል (Connected)'
-                  : isTestingFirebase
-                  ? 'በመፈተሽ ላይ...'
-                  : 'አልተገናኘም (ምክንያቱን እይ)'}
-              </span>
-            </button>
-          </div>
         </form>
       </div>
     </div>

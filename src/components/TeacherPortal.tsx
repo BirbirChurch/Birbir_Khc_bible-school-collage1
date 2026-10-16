@@ -292,8 +292,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
             <span>የመምህራን ውጤት መሙያ ገጽ</span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            መምህር: <strong className="text-emerald-900 font-bold">{teacherName}</strong> | የትምህርት ዘመን{' '}
-            {currentYear} ዓ.ም ({currentSemester}ኛ ሴሚስተር)
+            የትምህርት ዘመን {currentYear} ዓ.ም ({currentSemester}ኛ ሴሚስተር)
           </p>
         </div>
 

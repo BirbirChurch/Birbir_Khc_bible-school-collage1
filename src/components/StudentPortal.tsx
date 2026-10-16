@@ -78,8 +78,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
         </div>
       </div>
 
-      {/* Grade status alert */}
-      {!gradePublished ? (
+      {/* Grade status alert when pending */}
+      {!gradePublished && (
         <div className="bg-amber-50 border-l-4 border-amber-500 text-amber-900 p-4 rounded-xl text-xs flex items-start gap-2.5">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
@@ -88,11 +88,6 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
               የዚህ ሴሚስተር ውጤቶች በዋና ዲን ተረጋግጠው ይፋ እስኪሆኑ ድረስ ለጊዜው ተሰውረዋል።
             </p>
           </div>
-        </div>
-      ) : (
-        <div className="bg-emerald-50 border-l-4 border-emerald-600 text-emerald-900 p-3.5 rounded-xl text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0" />
-          <span>በዋና ዲን የጸደቀ ይፋዊ የሴሚስተር ውጤት ዝርዝር ከዚህ በታች ቀርቧል።</span>
         </div>
       )}
 

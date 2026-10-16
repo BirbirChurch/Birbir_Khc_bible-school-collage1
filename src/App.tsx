@@ -998,10 +998,8 @@ export default function App() {
           <p className="text-slate-200 font-semibold">
             የብርብር ከተማ ቃለ ሕይወት ቤተ ክርስቲያን መጽሐፍ ቅዱስ ትምህርት ቤት
           </p>
-          <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 pt-0.5">
+          <div className="flex items-center justify-center text-[11px] text-slate-400 pt-0.5">
             <span>Birbir City Kale Heywet Church Bible Training School &copy; 2019 – 2030 ዓ.ም</span>
-            <span>•</span>
-            <span className="text-amber-400 font-mono">Firebase: {firebaseConfig.projectId}</span>
           </div>
         </div>
       </footer>

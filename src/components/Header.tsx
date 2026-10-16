@@ -62,36 +62,8 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* User Navigation / Status */}
+            {/* User Navigation */}
             <div className="flex flex-wrap items-center justify-end gap-2.5">
-              {/* Firebase Cloud Status Indicator */}
-              <button
-                onClick={onOpenFirebaseModal}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm cursor-pointer ${
-                  firebaseReport?.status === 'connected'
-                    ? 'bg-emerald-950/80 border-emerald-500/80 text-emerald-300 hover:bg-emerald-900'
-                    : isTestingFirebase
-                    ? 'bg-amber-950/80 border-amber-500/80 text-amber-300 hover:bg-amber-900 animate-pulse'
-                    : 'bg-rose-950/80 border-rose-500/80 text-rose-300 hover:bg-rose-900'
-                }`}
-                title="የFirebase ግንኙነት ሁኔታና ማስተካከያ"
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>
-                  Firebase: {
-                    firebaseReport?.status === 'connected'
-                      ? 'ተገናኝቷል'
-                      : isTestingFirebase
-                      ? 'በመፈተሽ ላይ...'
-                      : 'አልተገናኘም (ምክንያት)'
-                  }
-                </span>
-                {firebaseReport?.status === 'connected' ? (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                ) : (
-                  <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                )}
-              </button>
               {currentUser && (
                 <>
                   <div className="flex items-center bg-emerald-950/80 border border-emerald-700/60 rounded-full px-3.5 py-1.5 text-xs text-slate-200 shadow-inner">
