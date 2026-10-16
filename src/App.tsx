@@ -972,6 +972,7 @@ export default function App() {
                 currentSemester={currentSemester}
                 onSaveGrades={(updated) => setGrades(updated)}
                 showNotify={showNotification}
+                onUpdateCourse={handleSaveCourse}
               />
             )}
 

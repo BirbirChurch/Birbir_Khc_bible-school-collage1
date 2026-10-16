@@ -20,6 +20,19 @@ export interface Student {
   photoUrl?: string;
 }
 
+export interface CourseAssessmentConfig {
+  p1Label: string;
+  p1Max: number;
+  p2Label: string;
+  p2Max: number;
+  midLabel: string;
+  midMax: number;
+  finalLabel: string;
+  finalMax: number;
+  attLabel: string;
+  attMax: number;
+}
+
 export interface Course {
   id: string;
   program: ProgramType;
@@ -28,14 +41,18 @@ export interface Course {
   schedule: string; // e.g. "መስከረም 11 – 25/2019"
   credits: number;
   remarks?: string;
+  assessmentConfig?: CourseAssessmentConfig;
 }
 
 export interface GradeBreakdown {
-  p1: number;   // ክፍል 1 (max 20)
-  p2: number;   // ክፍል 2 (max 20)
-  mid: number;  // ሚድ ፈተና (max 30)
-  final: number;// ፋይናል (max 20)
-  att: number;  // ተሳትፎ (max 10)
+  p1: number;           // ክፍል 1 (max 20 default)
+  p2: number;           // ክፍል 2 (max 20 default)
+  mid: number;          // ሚድ ፈተና (max 30 default)
+  final: number;        // ፋይናል (max 20 default)
+  att: number;          // ተሳትፎ (max 10 default)
+  customTotal?: number; // ድምር (100%) - መምህራን በቀጥታ ኤዲት የሚያደርጉት
+  customLetter?: string;// ፊደል ደረጃ - መምህራን በቀጥታ የሚመርጡት/የሚያርሙት
+  customDesc?: string;  // ትርጉም - መምህራን በቀጥታ ኤዲት የሚያደርጉት
 }
 
 export interface GradeDetail {

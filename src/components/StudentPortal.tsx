@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Award, Calendar, BookOpen, Clock, Printer, AlertTriangle, CheckCircle2, Bookmark } from 'lucide-react';
 import { Course, GradeBreakdown, Student } from '../types.ts';
-import { calculateGradeDetails, calculateStudentGPA, getGradeKey } from '../utils/gradeCalculations.ts';
+import { calculateGradeDetails, calculateStudentGPA, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
 
 interface StudentPortalProps {
   student: Student;
@@ -124,9 +124,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {studentCourses.map((c, idx) => {
                   const key = getGradeKey(student.uid, c.id, currentYear, currentSemester);
-                  const g = grades[key] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
-                  const total = (g.p1 || 0) + (g.p2 || 0) + (g.mid || 0) + (g.final || 0) + (g.att || 0);
-                  const gd = calculateGradeDetails(total);
+                  const g = grades[key];
+                  const eff = getEffectiveGradeValues(g);
 
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
@@ -135,13 +134,13 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                       <td className="p-3 text-amber-900 font-medium bg-amber-50/50 rounded">{c.schedule}</td>
                       <td className="p-3 text-slate-600 font-semibold">{c.teacher}</td>
                       <td className="p-3 text-center font-black font-mono">
-                        {gradePublished ? total : '***'}
+                        {!gradePublished ? '***' : eff.hasAny ? eff.total : '—'}
                       </td>
                       <td className="p-3 text-center font-black text-emerald-800 text-sm">
-                        {gradePublished ? gd.letter : '***'}
+                        {!gradePublished ? '***' : eff.letter}
                       </td>
                       <td className="p-3 text-center text-[10px] text-slate-500 font-medium">
-                        {gradePublished ? gd.desc : '***'}
+                        {!gradePublished ? '***' : eff.desc}
                       </td>
                     </tr>
                   );

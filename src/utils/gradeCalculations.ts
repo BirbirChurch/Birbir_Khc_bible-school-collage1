@@ -1,5 +1,36 @@
 import { OFFICIAL_GRADING_SCALE } from '../data/initialData.ts';
-import { Course, GradeBreakdown, GradeDetail, Student } from '../types.ts';
+import { Course, CourseAssessmentConfig, GradeBreakdown, GradeDetail, Student } from '../types.ts';
+
+export const DEFAULT_ASSESSMENT_CONFIG: CourseAssessmentConfig = {
+  p1Label: 'ክፍል 1',
+  p1Max: 20,
+  p2Label: 'ክፍል 2',
+  p2Max: 20,
+  midLabel: 'ሚድ',
+  midMax: 30,
+  finalLabel: 'ፋይናል',
+  finalMax: 20,
+  attLabel: 'ተሳትፎ',
+  attMax: 10
+};
+
+export function getCourseAssessmentConfig(course?: Course): CourseAssessmentConfig {
+  if (course?.assessmentConfig) {
+    return {
+      p1Label: course.assessmentConfig.p1Label || DEFAULT_ASSESSMENT_CONFIG.p1Label,
+      p1Max: Number(course.assessmentConfig.p1Max) || DEFAULT_ASSESSMENT_CONFIG.p1Max,
+      p2Label: course.assessmentConfig.p2Label || DEFAULT_ASSESSMENT_CONFIG.p2Label,
+      p2Max: Number(course.assessmentConfig.p2Max) || DEFAULT_ASSESSMENT_CONFIG.p2Max,
+      midLabel: course.assessmentConfig.midLabel || DEFAULT_ASSESSMENT_CONFIG.midLabel,
+      midMax: Number(course.assessmentConfig.midMax) || DEFAULT_ASSESSMENT_CONFIG.midMax,
+      finalLabel: course.assessmentConfig.finalLabel || DEFAULT_ASSESSMENT_CONFIG.finalLabel,
+      finalMax: Number(course.assessmentConfig.finalMax) || DEFAULT_ASSESSMENT_CONFIG.finalMax,
+      attLabel: course.assessmentConfig.attLabel || DEFAULT_ASSESSMENT_CONFIG.attLabel,
+      attMax: Number(course.assessmentConfig.attMax) || DEFAULT_ASSESSMENT_CONFIG.attMax
+    };
+  }
+  return DEFAULT_ASSESSMENT_CONFIG;
+}
 
 export function calculateGradeDetails(score: number): GradeDetail {
   const num = Math.min(100, Math.max(0, Math.round((Number(score) || 0) * 10) / 10));
@@ -11,6 +42,49 @@ export function calculateGradeDetails(score: number): GradeDetail {
     letter: grade.letter,
     points: grade.points,
     desc: grade.desc
+  };
+}
+
+export function getEffectiveGradeValues(breakdown?: GradeBreakdown): {
+  hasAny: boolean;
+  total: number;
+  letter: string;
+  points: number;
+  desc: string;
+} {
+  if (!breakdown) {
+    return { hasAny: false, total: 0, letter: '—', points: 0, desc: 'አልተሞላም' };
+  }
+
+  const partsSum = (breakdown.p1 || 0) + (breakdown.p2 || 0) + (breakdown.mid || 0) + (breakdown.final || 0) + (breakdown.att || 0);
+  const hasCustomTotal = typeof breakdown.customTotal === 'number' && !isNaN(breakdown.customTotal);
+  const total = hasCustomTotal ? breakdown.customTotal! : partsSum;
+  
+  const hasAny = total > 0 || Boolean(breakdown.customLetter) || Boolean(breakdown.customDesc) || hasCustomTotal;
+
+  if (!hasAny) {
+    return { hasAny: false, total: 0, letter: '—', points: 0, desc: 'አልተሞላም' };
+  }
+
+  const standard = calculateGradeDetails(total);
+
+  let letter = breakdown.customLetter || standard.letter;
+  let points = standard.points;
+  if (breakdown.customLetter) {
+    const matched = OFFICIAL_GRADING_SCALE.find(g => g.letter.toLowerCase() === breakdown.customLetter?.toLowerCase());
+    if (matched) {
+      points = matched.points;
+    }
+  }
+
+  const desc = breakdown.customDesc || standard.desc;
+
+  return {
+    hasAny: true,
+    total,
+    letter,
+    points,
+    desc
   };
 }
 
@@ -33,10 +107,11 @@ export function calculateStudentGPA(
     const key = getGradeKey(student.uid, course.id, year, sem);
     const breakdown = gradesRecord[key];
     if (breakdown) {
-      const sum = (breakdown.p1 || 0) + (breakdown.p2 || 0) + (breakdown.mid || 0) + (breakdown.final || 0) + (breakdown.att || 0);
-      const detail = calculateGradeDetails(sum);
-      totalQualityPoints += (detail.points * course.credits);
-      totalCredits += course.credits;
+      const eff = getEffectiveGradeValues(breakdown);
+      if (eff.hasAny) {
+        totalQualityPoints += (eff.points * course.credits);
+        totalCredits += course.credits;
+      }
     }
   });
 

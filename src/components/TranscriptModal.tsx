@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Printer, ShieldCheck } from 'lucide-react';
 import { Course, GradeBreakdown, OfficialSignaturesConfig, Student } from '../types.ts';
-import { calculateGradeDetails, calculateStudentGPA, getGradeKey } from '../utils/gradeCalculations.ts';
+import { calculateGradeDetails, calculateStudentGPA, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
 import { OFFICIAL_GRADING_SCALE } from '../data/initialData.ts';
 import { CHURCH_LOGO } from '../assets/logo.ts';
 
@@ -36,22 +36,21 @@ export const TranscriptModal: React.FC<TranscriptModalProps> = ({
   const courseRows = studentCourses.map((c, idx) => {
     const key = getGradeKey(student.uid, c.id, currentYear, currentSemester);
     const g = grades[key];
-    const total = (g?.p1 || 0) + (g?.p2 || 0) + (g?.mid || 0) + (g?.final || 0) + (g?.att || 0);
-    const isGraded = Boolean(g && total > 0);
+    const eff = getEffectiveGradeValues(g);
+    const isGraded = eff.hasAny;
 
     totalCredits += c.credits;
 
     if (isGraded) {
       gradedCoursesCount++;
-      const gd = calculateGradeDetails(total);
-      totalGradePoints += gd.points * c.credits;
+      totalGradePoints += eff.points * c.credits;
       return {
         index: idx + 1,
         course: c,
-        total: total.toString(),
-        letter: gd.letter,
-        points: gd.points.toFixed(2),
-        desc: gd.desc
+        total: eff.total.toString(),
+        letter: eff.letter,
+        points: eff.points.toFixed(2),
+        desc: eff.desc
       };
     }
 

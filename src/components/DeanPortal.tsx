@@ -18,7 +18,7 @@ import {
   Save
 } from 'lucide-react';
 import { Course, GradeBreakdown, OfficialSignaturesConfig, ProgramType, Student } from '../types.ts';
-import { calculateGradeDetails, calculateStudentGPA, getGradeKey } from '../utils/gradeCalculations.ts';
+import { calculateGradeDetails, calculateStudentGPA, getCourseAssessmentConfig, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
 import { OfficialSignaturesManager } from './OfficialSignaturesManager.tsx';
 
 interface DeanPortalProps {
@@ -518,102 +518,105 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-96 overflow-y-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-100/80 sticky top-0 font-bold uppercase text-[10px]">
-                <tr>
-                  <th className="p-2.5">ID</th>
-                  <th className="p-2.5">የተማሪ ስም</th>
-                  <th className="p-2.5 text-center w-20">ክፍል 1 (20)</th>
-                  <th className="p-2.5 text-center w-20">ክፍል 2 (20)</th>
-                  <th className="p-2.5 text-center w-20">ሚድ (30)</th>
-                  <th className="p-2.5 text-center w-20">ፋይናል (20)</th>
-                  <th className="p-2.5 text-center w-20">ተሳትፎ (10)</th>
-                  <th className="p-2.5 text-center">ድምር (100)</th>
-                  <th className="p-2.5 text-center">ፊደል</th>
-                  <th className="p-2.5 text-center">ነጥብ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {supervisedStudents.map((s) => {
-                  const g = editingGradeMatrix[s.uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
-                  const hasAny = (g.p1 || 0) + (g.p2 || 0) + (g.mid || 0) + (g.final || 0) + (g.att || 0) > 0;
-                  const total = (g.p1 || 0) + (g.p2 || 0) + (g.mid || 0) + (g.final || 0) + (g.att || 0);
-                  const gd = hasAny ? calculateGradeDetails(total) : { letter: '—', points: 0, desc: 'አልተሞላም' };
-
-                  return (
-                    <tr key={s.uid} className="hover:bg-slate-50">
-                      <td className="p-2.5 font-mono font-bold text-slate-800">{s.id}</td>
-                      <td className="p-2.5 font-bold text-slate-900">{s.name}</td>
-                      <td className="p-1.5 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="20"
-                          step="0.5"
-                          placeholder="—"
-                          value={g.p1 === 0 ? '' : g.p1}
-                          onChange={(e) => handleDeanGradeChange(s.uid, 'p1', e.target.value, 20)}
-                          className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                        />
-                      </td>
-                      <td className="p-1.5 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="20"
-                          step="0.5"
-                          placeholder="—"
-                          value={g.p2 === 0 ? '' : g.p2}
-                          onChange={(e) => handleDeanGradeChange(s.uid, 'p2', e.target.value, 20)}
-                          className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                        />
-                      </td>
-                      <td className="p-1.5 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="30"
-                          step="0.5"
-                          placeholder="—"
-                          value={g.mid === 0 ? '' : g.mid}
-                          onChange={(e) => handleDeanGradeChange(s.uid, 'mid', e.target.value, 30)}
-                          className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                        />
-                      </td>
-                      <td className="p-1.5 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="20"
-                          step="0.5"
-                          placeholder="—"
-                          value={g.final === 0 ? '' : g.final}
-                          onChange={(e) => handleDeanGradeChange(s.uid, 'final', e.target.value, 20)}
-                          className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                        />
-                      </td>
-                      <td className="p-1.5 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="10"
-                          step="0.5"
-                          placeholder="—"
-                          value={g.att === 0 ? '' : g.att}
-                          onChange={(e) => handleDeanGradeChange(s.uid, 'att', e.target.value, 10)}
-                          className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center font-black font-mono text-emerald-800">{hasAny ? total : '—'}</td>
-                      <td className="p-2.5 text-center font-black text-amber-700">{gd.letter}</td>
-                      <td className="p-2.5 text-center font-bold font-mono">{hasAny ? gd.points.toFixed(2) : '—'}</td>
+          {(() => {
+            const scConfig = getCourseAssessmentConfig(selectedSupervisedCourse);
+            return (
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="bg-slate-100/80 sticky top-0 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-2.5">ID</th>
+                      <th className="p-2.5">የተማሪ ስም</th>
+                      <th className="p-2.5 text-center w-20">{scConfig.p1Label} ({scConfig.p1Max}%)</th>
+                      <th className="p-2.5 text-center w-20">{scConfig.p2Label} ({scConfig.p2Max}%)</th>
+                      <th className="p-2.5 text-center w-20">{scConfig.midLabel} ({scConfig.midMax}%)</th>
+                      <th className="p-2.5 text-center w-20">{scConfig.finalLabel} ({scConfig.finalMax}%)</th>
+                      <th className="p-2.5 text-center w-20">{scConfig.attLabel} ({scConfig.attMax}%)</th>
+                      <th className="p-2.5 text-center">ድምር (100)</th>
+                      <th className="p-2.5 text-center">ፊደል</th>
+                      <th className="p-2.5 text-center">ነጥብ</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {supervisedStudents.map((s) => {
+                      const g = editingGradeMatrix[s.uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+                      const eff = getEffectiveGradeValues(g);
+
+                      return (
+                        <tr key={s.uid} className="hover:bg-slate-50">
+                          <td className="p-2.5 font-mono font-bold text-slate-800">{s.id}</td>
+                          <td className="p-2.5 font-bold text-slate-900">{s.name}</td>
+                          <td className="p-1.5 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max={scConfig.p1Max}
+                              step="0.5"
+                              placeholder="—"
+                              value={g.p1 === 0 ? '' : g.p1}
+                              onChange={(e) => handleDeanGradeChange(s.uid, 'p1', e.target.value, scConfig.p1Max)}
+                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
+                            />
+                          </td>
+                          <td className="p-1.5 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max={scConfig.p2Max}
+                              step="0.5"
+                              placeholder="—"
+                              value={g.p2 === 0 ? '' : g.p2}
+                              onChange={(e) => handleDeanGradeChange(s.uid, 'p2', e.target.value, scConfig.p2Max)}
+                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
+                            />
+                          </td>
+                          <td className="p-1.5 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max={scConfig.midMax}
+                              step="0.5"
+                              placeholder="—"
+                              value={g.mid === 0 ? '' : g.mid}
+                              onChange={(e) => handleDeanGradeChange(s.uid, 'mid', e.target.value, scConfig.midMax)}
+                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
+                            />
+                          </td>
+                          <td className="p-1.5 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max={scConfig.finalMax}
+                              step="0.5"
+                              placeholder="—"
+                              value={g.final === 0 ? '' : g.final}
+                              onChange={(e) => handleDeanGradeChange(s.uid, 'final', e.target.value, scConfig.finalMax)}
+                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
+                            />
+                          </td>
+                          <td className="p-1.5 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max={scConfig.attMax}
+                              step="0.5"
+                              placeholder="—"
+                              value={g.att === 0 ? '' : g.att}
+                              onChange={(e) => handleDeanGradeChange(s.uid, 'att', e.target.value, scConfig.attMax)}
+                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
+                            />
+                          </td>
+                          <td className="p-2.5 text-center font-black font-mono text-emerald-800">{eff.hasAny ? eff.total : '—'}</td>
+                          <td className="p-2.5 text-center font-black text-amber-700">{eff.hasAny ? eff.letter : '—'}</td>
+                          <td className="p-2.5 text-center font-bold font-mono">{eff.hasAny ? eff.points.toFixed(2) : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 
