@@ -18,7 +18,8 @@ import {
   Save
 } from 'lucide-react';
 import { Course, GradeBreakdown, OfficialSignaturesConfig, ProgramType, Student } from '../types.ts';
-import { calculateGradeDetails, calculateStudentGPA, getCourseAssessmentConfig, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
+import { calculateGradeDetails, calculateStudentGPA, getCourseAssessmentConfig, getCourseAssessmentItems, getCriterionScore, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
+import { getCriterionColor } from './TeacherPortal.tsx';
 import { OfficialSignaturesManager } from './OfficialSignaturesManager.tsx';
 
 interface DeanPortalProps {
@@ -141,16 +142,33 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
     showNotify(`አዲስ መምህር "${clean}" በስኬት ተመዝግቧል!`, 'success');
   };
 
-  const handleDeanGradeChange = (studentUid: string, field: keyof GradeBreakdown, val: string, maxVal: number) => {
+  const handleDeanCriterionChange = (
+    studentUid: string,
+    itemId: string,
+    val: string,
+    maxVal: number,
+    itemIndex: number
+  ) => {
     const clean = val.trim();
     const num = clean === '' ? 0 : Math.min(maxVal, Math.max(0, parseFloat(clean) || 0));
-    setEditingGradeMatrix((prev) => ({
-      ...prev,
-      [studentUid]: {
-        ...(prev[studentUid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 }),
-        [field]: num
-      }
-    }));
+    setEditingGradeMatrix((prev) => {
+      const current = prev[studentUid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+      const currentScores = current.scores ? { ...current.scores } : {};
+      currentScores[itemId] = num;
+
+      return {
+        ...prev,
+        [studentUid]: {
+          ...current,
+          scores: currentScores,
+          ...(itemId === 'p1' || itemIndex === 0 ? { p1: num } : {}),
+          ...(itemId === 'p2' || itemIndex === 1 ? { p2: num } : {}),
+          ...(itemId === 'mid' || itemIndex === 2 ? { mid: num } : {}),
+          ...(itemId === 'final' || itemIndex === 3 ? { final: num } : {}),
+          ...(itemId === 'att' || itemIndex === 4 ? { att: num } : {})
+        }
+      };
+    });
   };
 
   const handleSaveDeanGrades = () => {
@@ -167,15 +185,17 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
   // Download course grades as CSV
   const handleDownloadCourseGrades = (course: Course) => {
     const enrolled = students.filter((s) => s.program === course.program);
-    let csv = `\uFEFFተ.ቁ,መለያ ቁጥር (ID),የተማሪ ስም,ጾታ,ክፍል 1 (20%),ክፍል 2 (20%),ሚድ ፈተና (30%),ፋይናል (20%),ተሳትፎ (10%),ድምር (100%),የውጤት ፊደል,ነጥብ\n`;
+    const criteria = getCourseAssessmentItems(course);
+    const headers = criteria.map((it) => `"${it.label} (${it.max}%)"`).join(',');
+    let csv = `\uFEFFተ.ቁ,መለያ ቁጥር (ID),የተማሪ ስም,ጾታ,${headers},ድምር (100%),የውጤት ፊደል,ነጥብ\n`;
 
     enrolled.forEach((s, idx) => {
       const key = getGradeKey(s.uid, course.id, currentYear, currentSemester);
       const g = grades[key] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
-      const total = (g.p1 || 0) + (g.p2 || 0) + (g.mid || 0) + (g.final || 0) + (g.att || 0);
-      const gd = calculateGradeDetails(total);
+      const eff = getEffectiveGradeValues(g, criteria);
+      const scoresCols = criteria.map((it, itIdx) => getCriterionScore(g, it.id, itIdx)).join(',');
 
-      csv += `${idx + 1},"${s.id}","${s.name}","${s.gender}",${g.p1 || 0},${g.p2 || 0},${g.mid || 0},${g.final || 0},${g.att || 0},${total},"${gd.letter}",${gd.points.toFixed(2)}\n`;
+      csv += `${idx + 1},"${s.id}","${s.name}","${s.gender}",${scoresCols},${eff.total},"${eff.letter}",${eff.points.toFixed(2)}\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -280,6 +300,73 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
         </div>
       </div>
 
+      {/* Top Academic Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-indigo-800 to-indigo-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-indigo-200 uppercase tracking-wider">የድግሪ ከፍተኛ ውጤት (Rank 1)</p>
+              <h4 className="text-sm font-extrabold text-amber-300 mt-1 truncate max-w-[150px]">
+                {topDegree[0]?.name || '—'}
+              </h4>
+              <p className="text-xl font-black font-mono text-white mt-1">
+                GPA: {topDegree[0]?.gpa.toFixed(2) || '0.00'}
+              </p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <Award className="w-6 h-6 text-amber-300" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-emerald-800 to-teal-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider">የዲፕሎማ ከፍተኛ ውጤት (Rank 1)</p>
+              <h4 className="text-sm font-extrabold text-amber-300 mt-1 truncate max-w-[150px]">
+                {topDiploma[0]?.name || '—'}
+              </h4>
+              <p className="text-xl font-black font-mono text-white mt-1">
+                GPA: {topDiploma[0]?.gpa.toFixed(2) || '0.00'}
+              </p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <CheckCircle2 className="w-6 h-6 text-emerald-300" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-700 to-amber-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-amber-200 uppercase tracking-wider">የትምህርት ሰሌዳና ኮርሶች</p>
+              <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">{courses.length}</h3>
+              <p className="text-[11px] text-amber-200 mt-1">
+                መምህራን: {teachers.filter((t) => !t.includes('—')).length} ተመድበዋል
+              </p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <BookOpen className="w-6 h-6 text-amber-300" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-cyan-800 to-blue-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-cyan-200 uppercase tracking-wider">የተማሪዎች ይፋዊ ትራንስክሪፕት</p>
+              <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">{students.length}</h3>
+              <p className="text-[11px] text-cyan-200 mt-1">
+                {officialConfig?.showStamp ? 'ከማኅተም ጋር' : 'ክፍት የፊርማ ቦታ'}
+              </p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <Printer className="w-6 h-6 text-cyan-300" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Dean Navigation Tabs */}
       <div className="flex border-b border-slate-200 gap-2">
         <button
@@ -290,7 +377,7 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <BookOpen className="w-4 h-4" />
+          <BookOpen className="w-4 h-4 text-emerald-700" />
           <span>የኮርሶች ድልድልና የቀን ሰሌዳ ({courses.length})</span>
         </button>
 
@@ -298,7 +385,7 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
           onClick={() => setActiveTab('supervision')}
           className={`py-2.5 px-4 text-xs font-bold rounded-t-xl transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
             activeTab === 'supervision'
-              ? 'border-emerald-700 text-emerald-800 bg-white shadow-xs'
+              ? 'border-indigo-700 text-indigo-800 bg-white shadow-xs'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -310,7 +397,7 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
           onClick={() => setActiveTab('transcripts')}
           className={`py-2.5 px-4 text-xs font-bold rounded-t-xl transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
             activeTab === 'transcripts'
-              ? 'border-emerald-700 text-emerald-800 bg-white shadow-xs'
+              ? 'border-amber-600 text-amber-800 bg-white shadow-xs'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -322,11 +409,11 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
           onClick={() => setActiveTab('teachers')}
           className={`py-2.5 px-4 text-xs font-bold rounded-t-xl transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
             activeTab === 'teachers'
-              ? 'border-emerald-700 text-emerald-800 bg-white shadow-xs'
+              ? 'border-teal-700 text-teal-800 bg-white shadow-xs'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Users className="w-4 h-4 text-emerald-700" />
+          <Users className="w-4 h-4 text-teal-700" />
           <span>የመምህራን ዝርዝር ({teachers.filter(t => !t.includes('—')).length})</span>
         </button>
 
@@ -334,11 +421,11 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
           onClick={() => setActiveTab('official_signatures')}
           className={`py-2.5 px-4 text-xs font-bold rounded-t-xl transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
             activeTab === 'official_signatures'
-              ? 'border-emerald-700 text-emerald-800 bg-white shadow-xs'
+              ? 'border-purple-700 text-purple-800 bg-white shadow-xs'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Award className="w-4 h-4 text-indigo-700" />
+          <Award className="w-4 h-4 text-purple-700" />
           <span>ይፋዊ ማኅተምና ፊርማ</span>
         </button>
       </div>
@@ -519,96 +606,76 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
           </div>
 
           {(() => {
-            const scConfig = getCourseAssessmentConfig(selectedSupervisedCourse);
+            const criteria = getCourseAssessmentItems(selectedSupervisedCourse);
+            const totalWeight = criteria.reduce((sum, it) => sum + (Number(it.max) || 0), 0);
+
             return (
               <div className="overflow-x-auto max-h-96 overflow-y-auto">
                 <table className="w-full text-left text-xs text-slate-600">
-                  <thead className="bg-slate-100/80 sticky top-0 font-bold uppercase text-[10px]">
+                  <thead className="bg-slate-100/90 sticky top-0 font-bold uppercase text-[10px]">
                     <tr>
-                      <th className="p-2.5">ID</th>
-                      <th className="p-2.5">የተማሪ ስም</th>
-                      <th className="p-2.5 text-center w-20">{scConfig.p1Label} ({scConfig.p1Max}%)</th>
-                      <th className="p-2.5 text-center w-20">{scConfig.p2Label} ({scConfig.p2Max}%)</th>
-                      <th className="p-2.5 text-center w-20">{scConfig.midLabel} ({scConfig.midMax}%)</th>
-                      <th className="p-2.5 text-center w-20">{scConfig.finalLabel} ({scConfig.finalMax}%)</th>
-                      <th className="p-2.5 text-center w-20">{scConfig.attLabel} ({scConfig.attMax}%)</th>
-                      <th className="p-2.5 text-center">ድምር (100)</th>
-                      <th className="p-2.5 text-center">ፊደል</th>
-                      <th className="p-2.5 text-center">ነጥብ</th>
+                      <th className="p-2.5 bg-slate-100">ID</th>
+                      <th className="p-2.5 bg-slate-100">የተማሪ ስም</th>
+                      {criteria.map((it, idx) => {
+                        const color = getCriterionColor(idx);
+                        return (
+                          <th
+                            key={it.id}
+                            className={`p-2.5 text-center min-w-[75px] ${color.headerBg} border-b-2 ${color.headerBorder}`}
+                          >
+                            <span className="block font-bold truncate max-w-[80px]">{it.label}</span>
+                            <span className="block text-[9px] font-mono font-black">({it.max}%)</span>
+                          </th>
+                        );
+                      })}
+                      <th className="p-2.5 text-center bg-emerald-100/70 text-emerald-950 border-b-2 border-emerald-500 font-black">
+                        ድምር ({totalWeight}%)
+                      </th>
+                      <th className="p-2.5 text-center bg-amber-100/70 text-amber-950 border-b-2 border-amber-500 font-black">
+                        ፊደል
+                      </th>
+                      <th className="p-2.5 text-center bg-slate-100 text-slate-800">ነጥብ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {supervisedStudents.map((s) => {
                       const g = editingGradeMatrix[s.uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
-                      const eff = getEffectiveGradeValues(g);
+                      const eff = getEffectiveGradeValues(g, criteria);
 
                       return (
-                        <tr key={s.uid} className="hover:bg-slate-50">
+                        <tr key={s.uid} className="hover:bg-slate-50 transition-colors">
                           <td className="p-2.5 font-mono font-bold text-slate-800">{s.id}</td>
                           <td className="p-2.5 font-bold text-slate-900">{s.name}</td>
-                          <td className="p-1.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max={scConfig.p1Max}
-                              step="0.5"
-                              placeholder="—"
-                              value={g.p1 === 0 ? '' : g.p1}
-                              onChange={(e) => handleDeanGradeChange(s.uid, 'p1', e.target.value, scConfig.p1Max)}
-                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                            />
+                          {criteria.map((it, idx) => {
+                            const score = getCriterionScore(g, it.id, idx);
+                            const color = getCriterionColor(idx);
+                            return (
+                              <td key={it.id} className="p-1.5 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={it.max}
+                                  step="0.5"
+                                  placeholder="—"
+                                  value={score === 0 ? '' : score}
+                                  onChange={(e) =>
+                                    handleDeanCriterionChange(s.uid, it.id, e.target.value, it.max, idx)
+                                  }
+                                  className={`w-14 px-1 py-0.5 text-center font-mono text-xs border ${color.border} rounded bg-white placeholder:text-slate-300 shadow-2xs`}
+                                  title={`${it.label} (ከ ${it.max}%)`}
+                                />
+                              </td>
+                            );
+                          })}
+                          <td className="p-2.5 text-center font-black font-mono text-emerald-800">
+                            {eff.hasAny ? eff.total : '—'}
                           </td>
-                          <td className="p-1.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max={scConfig.p2Max}
-                              step="0.5"
-                              placeholder="—"
-                              value={g.p2 === 0 ? '' : g.p2}
-                              onChange={(e) => handleDeanGradeChange(s.uid, 'p2', e.target.value, scConfig.p2Max)}
-                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                            />
+                          <td className="p-2.5 text-center font-black text-amber-700">
+                            {eff.hasAny ? eff.letter : '—'}
                           </td>
-                          <td className="p-1.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max={scConfig.midMax}
-                              step="0.5"
-                              placeholder="—"
-                              value={g.mid === 0 ? '' : g.mid}
-                              onChange={(e) => handleDeanGradeChange(s.uid, 'mid', e.target.value, scConfig.midMax)}
-                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                            />
+                          <td className="p-2.5 text-center font-bold font-mono">
+                            {eff.hasAny ? eff.points.toFixed(2) : '—'}
                           </td>
-                          <td className="p-1.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max={scConfig.finalMax}
-                              step="0.5"
-                              placeholder="—"
-                              value={g.final === 0 ? '' : g.final}
-                              onChange={(e) => handleDeanGradeChange(s.uid, 'final', e.target.value, scConfig.finalMax)}
-                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                            />
-                          </td>
-                          <td className="p-1.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max={scConfig.attMax}
-                              step="0.5"
-                              placeholder="—"
-                              value={g.att === 0 ? '' : g.att}
-                              onChange={(e) => handleDeanGradeChange(s.uid, 'att', e.target.value, scConfig.attMax)}
-                              className="w-14 px-1 py-0.5 text-center font-mono text-xs border rounded bg-white placeholder:text-slate-300"
-                            />
-                          </td>
-                          <td className="p-2.5 text-center font-black font-mono text-emerald-800">{eff.hasAny ? eff.total : '—'}</td>
-                          <td className="p-2.5 text-center font-black text-amber-700">{eff.hasAny ? eff.letter : '—'}</td>
-                          <td className="p-2.5 text-center font-bold font-mono">{eff.hasAny ? eff.points.toFixed(2) : '—'}</td>
                         </tr>
                       );
                     })}

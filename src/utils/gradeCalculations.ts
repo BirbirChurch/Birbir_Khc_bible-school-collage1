@@ -1,7 +1,16 @@
 import { OFFICIAL_GRADING_SCALE } from '../data/initialData.ts';
-import { Course, CourseAssessmentConfig, GradeBreakdown, GradeDetail, Student } from '../types.ts';
+import { AssessmentCriterionItem, Course, CourseAssessmentConfig, GradeBreakdown, GradeDetail, Student } from '../types.ts';
+
+export const DEFAULT_ASSESSMENT_ITEMS: AssessmentCriterionItem[] = [
+  { id: 'p1', label: 'ክፍል 1', max: 20 },
+  { id: 'p2', label: 'ክፍል 2', max: 20 },
+  { id: 'mid', label: 'ሚድ', max: 30 },
+  { id: 'final', label: 'ፋይናል', max: 20 },
+  { id: 'att', label: 'ተሳትፎ', max: 10 }
+];
 
 export const DEFAULT_ASSESSMENT_CONFIG: CourseAssessmentConfig = {
+  items: DEFAULT_ASSESSMENT_ITEMS,
   p1Label: 'ክፍል 1',
   p1Max: 20,
   p2Label: 'ክፍል 2',
@@ -14,19 +23,60 @@ export const DEFAULT_ASSESSMENT_CONFIG: CourseAssessmentConfig = {
   attMax: 10
 };
 
+export function getCourseAssessmentItems(configOrCourse?: Course | CourseAssessmentConfig): AssessmentCriterionItem[] {
+  if (!configOrCourse) return [...DEFAULT_ASSESSMENT_ITEMS];
+  const config: CourseAssessmentConfig | undefined =
+    'assessmentConfig' in (configOrCourse as Course)
+      ? (configOrCourse as Course).assessmentConfig
+      : (configOrCourse as CourseAssessmentConfig);
+
+  if (config?.items && Array.isArray(config.items) && config.items.length > 0) {
+    return config.items.map((item: AssessmentCriterionItem) => ({ ...item }));
+  }
+  return [
+    { id: 'p1', label: config?.p1Label || 'ክፍል 1', max: Number(config?.p1Max) || 20 },
+    { id: 'p2', label: config?.p2Label || 'ክፍል 2', max: Number(config?.p2Max) || 20 },
+    { id: 'mid', label: config?.midLabel || 'ሚድ', max: Number(config?.midMax) || 30 },
+    { id: 'final', label: config?.finalLabel || 'ፋይናል', max: Number(config?.finalMax) || 20 },
+    { id: 'att', label: config?.attLabel || 'ተሳትፎ', max: Number(config?.attMax) || 10 }
+  ];
+}
+
+export function getCriterionScore(breakdown: GradeBreakdown | undefined, itemId: string, index?: number): number {
+  if (!breakdown) return 0;
+  if (breakdown.scores && typeof breakdown.scores[itemId] === 'number') {
+    return breakdown.scores[itemId];
+  }
+  if (itemId === 'p1') return breakdown.p1 || 0;
+  if (itemId === 'p2') return breakdown.p2 || 0;
+  if (itemId === 'mid') return breakdown.mid || 0;
+  if (itemId === 'final') return breakdown.final || 0;
+  if (itemId === 'att') return breakdown.att || 0;
+  if (typeof index === 'number') {
+    if (index === 0) return breakdown.p1 || 0;
+    if (index === 1) return breakdown.p2 || 0;
+    if (index === 2) return breakdown.mid || 0;
+    if (index === 3) return breakdown.final || 0;
+    if (index === 4) return breakdown.att || 0;
+  }
+  return 0;
+}
+
 export function getCourseAssessmentConfig(course?: Course): CourseAssessmentConfig {
   if (course?.assessmentConfig) {
+    const items = getCourseAssessmentItems(course);
     return {
-      p1Label: course.assessmentConfig.p1Label || DEFAULT_ASSESSMENT_CONFIG.p1Label,
-      p1Max: Number(course.assessmentConfig.p1Max) || DEFAULT_ASSESSMENT_CONFIG.p1Max,
-      p2Label: course.assessmentConfig.p2Label || DEFAULT_ASSESSMENT_CONFIG.p2Label,
-      p2Max: Number(course.assessmentConfig.p2Max) || DEFAULT_ASSESSMENT_CONFIG.p2Max,
-      midLabel: course.assessmentConfig.midLabel || DEFAULT_ASSESSMENT_CONFIG.midLabel,
-      midMax: Number(course.assessmentConfig.midMax) || DEFAULT_ASSESSMENT_CONFIG.midMax,
-      finalLabel: course.assessmentConfig.finalLabel || DEFAULT_ASSESSMENT_CONFIG.finalLabel,
-      finalMax: Number(course.assessmentConfig.finalMax) || DEFAULT_ASSESSMENT_CONFIG.finalMax,
-      attLabel: course.assessmentConfig.attLabel || DEFAULT_ASSESSMENT_CONFIG.attLabel,
-      attMax: Number(course.assessmentConfig.attMax) || DEFAULT_ASSESSMENT_CONFIG.attMax
+      items,
+      p1Label: items[0]?.label || DEFAULT_ASSESSMENT_CONFIG.p1Label,
+      p1Max: items[0]?.max || DEFAULT_ASSESSMENT_CONFIG.p1Max,
+      p2Label: items[1]?.label || DEFAULT_ASSESSMENT_CONFIG.p2Label,
+      p2Max: items[1]?.max || DEFAULT_ASSESSMENT_CONFIG.p2Max,
+      midLabel: items[2]?.label || DEFAULT_ASSESSMENT_CONFIG.midLabel,
+      midMax: items[2]?.max || DEFAULT_ASSESSMENT_CONFIG.midMax,
+      finalLabel: items[3]?.label || DEFAULT_ASSESSMENT_CONFIG.finalLabel,
+      finalMax: items[3]?.max || DEFAULT_ASSESSMENT_CONFIG.finalMax,
+      attLabel: items[4]?.label || DEFAULT_ASSESSMENT_CONFIG.attLabel,
+      attMax: items[4]?.max || DEFAULT_ASSESSMENT_CONFIG.attMax
     };
   }
   return DEFAULT_ASSESSMENT_CONFIG;
@@ -45,7 +95,7 @@ export function calculateGradeDetails(score: number): GradeDetail {
   };
 }
 
-export function getEffectiveGradeValues(breakdown?: GradeBreakdown): {
+export function getEffectiveGradeValues(breakdown?: GradeBreakdown, criteria?: AssessmentCriterionItem[]): {
   hasAny: boolean;
   total: number;
   letter: string;
@@ -56,7 +106,15 @@ export function getEffectiveGradeValues(breakdown?: GradeBreakdown): {
     return { hasAny: false, total: 0, letter: '—', points: 0, desc: 'አልተሞላም' };
   }
 
-  const partsSum = (breakdown.p1 || 0) + (breakdown.p2 || 0) + (breakdown.mid || 0) + (breakdown.final || 0) + (breakdown.att || 0);
+  let partsSum = 0;
+  if (criteria && criteria.length > 0) {
+    partsSum = criteria.reduce((sum, item, idx) => sum + getCriterionScore(breakdown, item.id, idx), 0);
+  } else if (breakdown.scores && Object.keys(breakdown.scores).length > 0) {
+    partsSum = Object.values(breakdown.scores).reduce((sum, val) => sum + (Number(val) || 0), 0);
+  } else {
+    partsSum = (breakdown.p1 || 0) + (breakdown.p2 || 0) + (breakdown.mid || 0) + (breakdown.final || 0) + (breakdown.att || 0);
+  }
+
   const hasCustomTotal = typeof breakdown.customTotal === 'number' && !isNaN(breakdown.customTotal);
   const total = hasCustomTotal ? breakdown.customTotal! : partsSum;
   
@@ -107,7 +165,7 @@ export function calculateStudentGPA(
     const key = getGradeKey(student.uid, course.id, year, sem);
     const breakdown = gradesRecord[key];
     if (breakdown) {
-      const eff = getEffectiveGradeValues(breakdown);
+      const eff = getEffectiveGradeValues(breakdown, getCourseAssessmentItems(course));
       if (eff.hasAny) {
         totalQualityPoints += (eff.points * course.credits);
         totalCredits += course.credits;

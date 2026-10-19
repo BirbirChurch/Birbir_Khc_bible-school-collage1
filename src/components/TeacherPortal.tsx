@@ -10,17 +10,40 @@ import {
   RotateCcw,
   X,
   Check,
-  Edit3
+  Edit3,
+  Plus,
+  Trash2,
+  Sparkles,
+  Layers
 } from 'lucide-react';
-import { Course, CourseAssessmentConfig, GradeBreakdown, Student } from '../types.ts';
+import { AssessmentCriterionItem, Course, CourseAssessmentConfig, GradeBreakdown, Student } from '../types.ts';
 import {
   calculateGradeDetails,
   DEFAULT_ASSESSMENT_CONFIG,
+  DEFAULT_ASSESSMENT_ITEMS,
   getCourseAssessmentConfig,
+  getCourseAssessmentItems,
+  getCriterionScore,
   getEffectiveGradeValues,
   getGradeKey
 } from '../utils/gradeCalculations.ts';
 import { OFFICIAL_GRADING_SCALE } from '../data/initialData.ts';
+
+// Dynamic Color Palette for criteria columns and cards
+export const CRITERIA_COLORS = [
+  { name: 'emerald', border: 'border-emerald-300', bg: 'bg-emerald-50/80', badge: 'bg-emerald-100 text-emerald-900', text: 'text-emerald-700', headerBorder: 'border-emerald-500', headerBg: 'bg-emerald-50 text-emerald-950', focus: 'focus:ring-emerald-700' },
+  { name: 'cyan', border: 'border-cyan-300', bg: 'bg-cyan-50/80', badge: 'bg-cyan-100 text-cyan-900', text: 'text-cyan-700', headerBorder: 'border-cyan-500', headerBg: 'bg-cyan-50 text-cyan-950', focus: 'focus:ring-cyan-700' },
+  { name: 'indigo', border: 'border-indigo-300', bg: 'bg-indigo-50/80', badge: 'bg-indigo-100 text-indigo-900', text: 'text-indigo-700', headerBorder: 'border-indigo-500', headerBg: 'bg-indigo-50 text-indigo-950', focus: 'focus:ring-indigo-700' },
+  { name: 'amber', border: 'border-amber-300', bg: 'bg-amber-50/80', badge: 'bg-amber-100 text-amber-900', text: 'text-amber-700', headerBorder: 'border-amber-500', headerBg: 'bg-amber-50 text-amber-950', focus: 'focus:ring-amber-700' },
+  { name: 'purple', border: 'border-purple-300', bg: 'bg-purple-50/80', badge: 'bg-purple-100 text-purple-900', text: 'text-purple-700', headerBorder: 'border-purple-500', headerBg: 'bg-purple-50 text-purple-950', focus: 'focus:ring-purple-700' },
+  { name: 'rose', border: 'border-rose-300', bg: 'bg-rose-50/80', badge: 'bg-rose-100 text-rose-900', text: 'text-rose-700', headerBorder: 'border-rose-500', headerBg: 'bg-rose-50 text-rose-950', focus: 'focus:ring-rose-700' },
+  { name: 'teal', border: 'border-teal-300', bg: 'bg-teal-50/80', badge: 'bg-teal-100 text-teal-900', text: 'text-teal-700', headerBorder: 'border-teal-500', headerBg: 'bg-teal-50 text-teal-950', focus: 'focus:ring-teal-700' },
+  { name: 'orange', border: 'border-orange-300', bg: 'bg-orange-50/80', badge: 'bg-orange-100 text-orange-900', text: 'text-orange-700', headerBorder: 'border-orange-500', headerBg: 'bg-orange-50 text-orange-950', focus: 'focus:ring-orange-700' }
+];
+
+export function getCriterionColor(index: number) {
+  return CRITERIA_COLORS[index % CRITERIA_COLORS.length];
+}
 
 interface TeacherPortalProps {
   teacherName: string;
@@ -49,9 +72,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const [selectedCourseId, setSelectedCourseId] = useState<string>(teacherCourses[0]?.id || '');
   const [localGrades, setLocalGrades] = useState<Record<string, GradeBreakdown>>({});
 
-  // Assessment Scheme Modal State
+  // Assessment Scheme Modal State & Dynamic criteria list
   const [isSchemeModalOpen, setIsSchemeModalOpen] = useState(false);
-  const [editingScheme, setEditingScheme] = useState<CourseAssessmentConfig>(DEFAULT_ASSESSMENT_CONFIG);
 
   useEffect(() => {
     if (teacherCourses.length > 0 && (!selectedCourseId || !teacherCourses.some((c) => c.id === selectedCourseId))) {
@@ -60,12 +82,16 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   }, [teacherCourses, selectedCourseId]);
 
   const activeCourse = courses.find((c) => c.id === selectedCourseId);
-  const assessmentConfig = getCourseAssessmentConfig(activeCourse);
+  const activeItems = getCourseAssessmentItems(activeCourse);
+
+  const [editingItems, setEditingItems] = useState<AssessmentCriterionItem[]>(() =>
+    getCourseAssessmentItems(activeCourse)
+  );
 
   // Sync scheme edit form when active course changes
   useEffect(() => {
     if (activeCourse) {
-      setEditingScheme(getCourseAssessmentConfig(activeCourse));
+      setEditingItems(getCourseAssessmentItems(activeCourse));
     }
   }, [activeCourse?.id, activeCourse?.assessmentConfig]);
 
@@ -88,32 +114,250 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
 
   const enrolledStudents = activeCourse ? students.filter((s) => s.program === activeCourse.program) : [];
 
-  // Handle changing numeric criterion (p1, p2, mid, final, att)
-  const handleInputChange = (
+  // Add new criterion (መመዘኛ ጨምር)
+  const handleAddCriterion = (customLabel?: string, customMax?: number) => {
+    if (editingItems.length >= 10) {
+      showNotify('ከ 10 መመዘኛ በላይ ማከል አይቻልም!', 'warning');
+      return;
+    }
+    const nextNum = editingItems.length + 1;
+    const newItem: AssessmentCriterionItem = {
+      id: 'crit_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 5),
+      label: customLabel || `መመዘኛ ${nextNum}`,
+      max: typeof customMax === 'number' ? customMax : 10
+    };
+    setEditingItems((prev) => [...prev, newItem]);
+    showNotify(`አዲስ መመዘኛ (${newItem.label}) ተጨምሯል!`, 'info');
+  };
+
+  // Remove/decrease criterion (መመዘኛ ቀንስ/አጥፋ)
+  const handleRemoveCriterion = (index: number) => {
+    if (editingItems.length <= 1) {
+      showNotify('ቢያንስ 1 የውጤት መመዘኛ መኖር አለበት!', 'warning');
+      return;
+    }
+    const removed = editingItems[index];
+    setEditingItems((prev) => prev.filter((_, i) => i !== index));
+    showNotify(`መመዘኛ '${removed?.label}' ተቀንሷል!`, 'info');
+  };
+
+  // Quick remove last criterion (የመጨረሻውን መመዘኛ ቀንስ)
+  const handleRemoveLastCriterion = () => {
+    if (editingItems.length <= 1) {
+      showNotify('ቢያንስ 1 የውጤት መመዘኛ መኖር አለበት!', 'warning');
+      return;
+    }
+    const last = editingItems[editingItems.length - 1];
+    setEditingItems((prev) => prev.slice(0, -1));
+    showNotify(`የመጨረሻው መመዘኛ '${last.label}' ተቀንሷል!`, 'info');
+  };
+
+  // Step criterion weight by delta (+5, -5)
+  const handleStepCriterionWeight = (index: number, delta: number) => {
+    setEditingItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const current = Number(item.max) || 0;
+        const next = Math.max(0, Math.min(100, current + delta));
+        return { ...item, max: next };
+      })
+    );
+  };
+
+  // Direct remove criterion from main table
+  const handleDirectRemoveCriterionFromTable = (criterionId: string, label: string) => {
+    if (!activeCourse) return;
+    if (activeItems.length <= 1) {
+      showNotify('ቢያንስ 1 የውጤት መመዘኛ መኖር አለበት!', 'warning');
+      return;
+    }
+    if (window.confirm(`እርግጠኛ ነዎት? '${label}' የሚለውን መመዘኛ መቀነስ/ማጥፋት ይፈልጋሉ?`)) {
+      const remaining = activeItems.filter((it) => it.id !== criterionId);
+      const updatedCourse: Course = {
+        ...activeCourse,
+        assessmentConfig: {
+          items: remaining,
+          p1Label: remaining[0]?.label || 'ክፍል 1',
+          p1Max: remaining[0]?.max || 20,
+          p2Label: remaining[1]?.label || 'ክፍል 2',
+          p2Max: remaining[1]?.max || 20,
+          midLabel: remaining[2]?.label || 'ሚድ',
+          midMax: remaining[2]?.max || 30,
+          finalLabel: remaining[3]?.label || 'ፋይናል',
+          finalMax: remaining[3]?.max || 20,
+          attLabel: remaining[4]?.label || 'ተሳትፎ',
+          attMax: remaining[4]?.max || 10
+        }
+      };
+      if (onUpdateCourse) {
+        onUpdateCourse(updatedCourse);
+      }
+      showNotify(`'${label}' የሚለው መመዘኛ ተቀንሷል!`, 'info');
+    }
+  };
+
+  // Update criterion label or max percentage
+  const handleCriterionItemChange = (index: number, field: 'label' | 'max', val: string | number) => {
+    setEditingItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        if (field === 'max') {
+          const num = Math.max(0, Math.min(100, typeof val === 'string' ? parseFloat(val) || 0 : val));
+          return { ...item, max: num };
+        }
+        return { ...item, label: String(val) };
+      })
+    );
+  };
+
+  // Apply quick criteria presets
+  const handleApplyPreset = (presetName: '2' | '3' | '4' | '5' | '6') => {
+    if (presetName === '2') {
+      setEditingItems([
+        { id: 'crit_1', label: 'ሚድ ፈተና', max: 40 },
+        { id: 'crit_2', label: 'ፋይናል ፈተና', max: 60 }
+      ]);
+    } else if (presetName === '3') {
+      setEditingItems([
+        { id: 'crit_1', label: 'አሳይመንት', max: 30 },
+        { id: 'crit_2', label: 'ሚድ ፈተና', max: 30 },
+        { id: 'crit_3', label: 'ፋይናል ፈተና', max: 40 }
+      ]);
+    } else if (presetName === '4') {
+      setEditingItems([
+        { id: 'crit_1', label: 'ክፍል 1', max: 20 },
+        { id: 'crit_2', label: 'ክፍል 2', max: 20 },
+        { id: 'crit_3', label: 'ሚድ ፈተና', max: 30 },
+        { id: 'crit_4', label: 'ፋይናል ፈተና', max: 30 }
+      ]);
+    } else if (presetName === '5') {
+      setEditingItems([
+        { id: 'p1', label: 'ክፍል 1', max: 20 },
+        { id: 'p2', label: 'ክፍል 2', max: 20 },
+        { id: 'mid', label: 'ሚድ', max: 30 },
+        { id: 'final', label: 'ፋይናል', max: 20 },
+        { id: 'att', label: 'ተሳትፎ', max: 10 }
+      ]);
+    } else if (presetName === '6') {
+      setEditingItems([
+        { id: 'crit_1', label: 'አሳይመንት 1', max: 15 },
+        { id: 'crit_2', label: 'አሳይመንት 2', max: 15 },
+        { id: 'crit_3', label: 'የቡድን ስራ', max: 10 },
+        { id: 'crit_4', label: 'ሚድ ፈተና', max: 25 },
+        { id: 'crit_5', label: 'ፋይናል ፈተና', max: 25 },
+        { id: 'crit_6', label: 'ተሳትፎ', max: 10 }
+      ]);
+    }
+  };
+
+  // Auto-balance criteria weights to 100%
+  const handleAutoBalance = () => {
+    const currentTotal = editingItems.reduce((acc, it) => acc + (Number(it.max) || 0), 0);
+    if (currentTotal === 100) {
+      showNotify('መቶኛው አስቀድሞ 100% ነው!', 'info');
+      return;
+    }
+    const diff = 100 - currentTotal;
+    const lastIndex = editingItems.length - 1;
+    const lastItem = editingItems[lastIndex];
+    if (lastItem && lastItem.max + diff >= 1) {
+      setEditingItems((prev) =>
+        prev.map((it, i) => (i === lastIndex ? { ...it, max: it.max + diff } : it))
+      );
+      showNotify(`የመጨረሻው መመዘኛ (${lastItem.label}) ተስተካክሎ ድምሩ 100% ሆኗል!`, 'success');
+    } else {
+      const factor = 100 / (currentTotal || 1);
+      let running = 0;
+      setEditingItems((prev) =>
+        prev.map((it, i) => {
+          if (i === prev.length - 1) {
+            return { ...it, max: Math.max(1, 100 - running) };
+          }
+          const m = Math.max(1, Math.round(it.max * factor));
+          running += m;
+          return { ...it, max: m };
+        })
+      );
+      showNotify('መቶኛዎቹ በሙሉ ተስተካክለው ድምሩ 100% ሆኗል!', 'success');
+    }
+  };
+
+  // Save customized assessment criteria & weights
+  const handleSaveScheme = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCourse) return;
+
+    const totalWeight = editingItems.reduce((sum, item) => sum + (Number(item.max) || 0), 0);
+
+    const updatedCourse: Course = {
+      ...activeCourse,
+      assessmentConfig: {
+        items: editingItems.map((it) => ({
+          id: it.id,
+          label: it.label.trim() || 'መመዘኛ',
+          max: Number(it.max) || 10
+        })),
+        p1Label: editingItems[0]?.label || 'ክፍል 1',
+        p1Max: editingItems[0]?.max || 20,
+        p2Label: editingItems[1]?.label || 'ክፍል 2',
+        p2Max: editingItems[1]?.max || 20,
+        midLabel: editingItems[2]?.label || 'ሚድ',
+        midMax: editingItems[2]?.max || 30,
+        finalLabel: editingItems[3]?.label || 'ፋይናል',
+        finalMax: editingItems[3]?.max || 20,
+        attLabel: editingItems[4]?.label || 'ተሳትፎ',
+        attMax: editingItems[4]?.max || 10
+      }
+    };
+
+    if (onUpdateCourse) {
+      onUpdateCourse(updatedCourse);
+    }
+
+    setIsSchemeModalOpen(false);
+    showNotify(
+      `የኮርሱ የውጤት መመዘኛዎችና መቶኛዎች በስኬት ተስተካክለዋል! (${editingItems.length} መመዘኛዎች፣ ጠቅላላ መቶኛ፡ ${totalWeight}%)`,
+      'success'
+    );
+  };
+
+  const handleResetSchemeToDefault = () => {
+    setEditingItems(DEFAULT_ASSESSMENT_ITEMS.map((item) => ({ ...item })));
+  };
+
+  // Handle changing numeric criterion for a student
+  const handleCriterionScoreChange = (
     studentUid: string,
-    field: 'p1' | 'p2' | 'mid' | 'final' | 'att',
+    itemId: string,
     val: string,
-    maxVal: number
+    maxVal: number,
+    itemIndex: number
   ) => {
     const clean = val.trim();
     const parsed = clean === '' ? 0 : Math.min(maxVal, Math.max(0, parseFloat(clean) || 0));
+
     setLocalGrades((prev) => {
       const current = prev[studentUid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
-      const updatedItem = {
-        ...current,
-        [field]: parsed
-      };
+      const currentScores = current.scores ? { ...current.scores } : {};
 
-      // If user hadn't explicitly typed a custom total, auto-update standard details
-      if (updatedItem.customTotal === undefined) {
-        const sum = (updatedItem.p1 || 0) + (updatedItem.p2 || 0) + (updatedItem.mid || 0) + (updatedItem.final || 0) + (updatedItem.att || 0);
-        if (sum > 0 && !updatedItem.customLetter) {
-          const gd = calculateGradeDetails(sum);
-          if (!updatedItem.customDesc) {
-            // let desc follow default
-          }
+      // Seed any missing criterion scores
+      activeItems.forEach((it, idx) => {
+        if (currentScores[it.id] === undefined) {
+          currentScores[it.id] = getCriterionScore(current, it.id, idx);
         }
-      }
+      });
+
+      currentScores[itemId] = parsed;
+
+      const updatedItem: GradeBreakdown = {
+        ...current,
+        scores: currentScores,
+        ...(itemId === 'p1' || itemIndex === 0 ? { p1: parsed } : {}),
+        ...(itemId === 'p2' || itemIndex === 1 ? { p2: parsed } : {}),
+        ...(itemId === 'mid' || itemIndex === 2 ? { mid: parsed } : {}),
+        ...(itemId === 'final' || itemIndex === 3 ? { final: parsed } : {}),
+        ...(itemId === 'att' || itemIndex === 4 ? { att: parsed } : {})
+      };
 
       return {
         ...prev,
@@ -183,48 +427,6 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
     });
   };
 
-  // Save customized assessment criteria & weights
-  const handleSaveScheme = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeCourse) return;
-
-    const totalWeight =
-      Number(editingScheme.p1Max || 0) +
-      Number(editingScheme.p2Max || 0) +
-      Number(editingScheme.midMax || 0) +
-      Number(editingScheme.finalMax || 0) +
-      Number(editingScheme.attMax || 0);
-
-    const updatedCourse: Course = {
-      ...activeCourse,
-      assessmentConfig: {
-        p1Label: editingScheme.p1Label.trim() || 'ክፍል 1',
-        p1Max: Number(editingScheme.p1Max) || 20,
-        p2Label: editingScheme.p2Label.trim() || 'ክፍል 2',
-        p2Max: Number(editingScheme.p2Max) || 20,
-        midLabel: editingScheme.midLabel.trim() || 'ሚድ',
-        midMax: Number(editingScheme.midMax) || 30,
-        finalLabel: editingScheme.finalLabel.trim() || 'ፋይናል',
-        finalMax: Number(editingScheme.finalMax) || 20,
-        attLabel: editingScheme.attLabel.trim() || 'ተሳትፎ',
-        attMax: Number(editingScheme.attMax) || 10
-      }
-    };
-
-    if (onUpdateCourse) {
-      onUpdateCourse(updatedCourse);
-    }
-
-    setIsSchemeModalOpen(false);
-    showNotify(
-      `የኮርሱ የውጤት መመዘኛዎችና መቶኛዎች በስኬት ተስተካክለዋል! (ጠቅላላ መቶኛ፡ ${totalWeight}%)`,
-      'success'
-    );
-  };
-
-  const handleResetSchemeToDefault = () => {
-    setEditingScheme(DEFAULT_ASSESSMENT_CONFIG);
-  };
 
   // Clear all course grades to blank
   const handleClearCourse = () => {
@@ -279,8 +481,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
 
   const classAverage = gradedCount > 0 ? (totalScoreSum / gradedCount).toFixed(1) : '0.0';
 
-  const totalSchemeWeight =
-    editingScheme.p1Max + editingScheme.p2Max + editingScheme.midMax + editingScheme.finalMax + editingScheme.attMax;
+  const totalSchemeWeight = editingItems.reduce((acc, it) => acc + (Number(it.max) || 0), 0);
+  const totalActiveWeight = activeItems.reduce((acc, it) => acc + (Number(it.max) || 0), 0);
 
   return (
     <div className="space-y-6 no-print">
@@ -326,52 +528,100 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         </div>
       ) : (
         <>
-          {/* Active Course Schedule Card & Grade Legend Banner */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-1 bg-gradient-to-br from-emerald-900 to-slate-900 text-white rounded-3xl p-5 shadow-sm space-y-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                የተመደበ ኮርስና የቀን ሰሌዳ
-              </span>
-              <h4 className="text-lg font-extrabold text-white">{activeCourse?.name}</h4>
-              <p className="text-xs text-emerald-200 flex items-center gap-1.5 font-semibold">
-                <Calendar className="w-4 h-4 text-amber-400" />
-                <span>ቀን: {activeCourse?.schedule || 'አልተወሰነም'}</span>
-              </p>
-              <div className="pt-2 flex justify-between text-xs text-slate-300 border-t border-emerald-800">
-                <span>
-                  ፕሮግራም: <strong>{activeCourse?.program}</strong>
-                </span>
-                <span>
-                  ተማሪዎች: <strong>{enrolledStudents.length}</strong>
-                </span>
+          {/* Top 4 Colorful Academic Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-emerald-800 to-teal-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider">የኮርሱ ተማሪዎች</p>
+                  <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">{enrolledStudents.length}</h3>
+                  <p className="text-[11px] text-emerald-200 mt-1">ፕሮግራም: {activeCourse?.program}</p>
+                </div>
+                <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+                  <GraduationCap className="w-6 h-6 text-emerald-300" />
+                </div>
               </div>
             </div>
 
-            {/* Official Grading Scale Reference Card */}
-            <div className="md:col-span-2 bg-amber-50/70 border border-amber-300 rounded-3xl p-5 space-y-2">
-              <p className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-amber-700" />
-                <span>ይፋዊ የውጤት መስፈርት (Grading Scale):</span>
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-slate-800">
-                <div className="bg-white p-1.5 rounded-lg border border-amber-200">
-                  <strong className="text-emerald-700 font-bold">90% – 100%</strong> ➔ A+ (እጅግ በጣም ጥሩ)
+            <div className="bg-gradient-to-br from-amber-700 to-orange-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[11px] font-bold text-amber-200 uppercase tracking-wider">የክፍሉ አማካይ ውጤት</p>
+                  <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">{classAverage}%</h3>
+                  <p className="text-[11px] text-amber-200 mt-1">{gradedCount} ከተማሪዎች ተሞልቷል</p>
                 </div>
-                <div className="bg-white p-1.5 rounded-lg border border-amber-200">
-                  <strong className="text-emerald-700 font-bold">80% – 89%</strong> ➔ A (በጣም ጥሩ)
+                <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+                  <CheckCircle2 className="w-6 h-6 text-amber-300" />
                 </div>
-                <div className="bg-white p-1.5 rounded-lg border border-amber-200">
-                  <strong className="text-indigo-700 font-bold">70% – 79%</strong> ➔ B (ጥሩ)
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-indigo-800 to-slate-900 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[11px] font-bold text-indigo-200 uppercase tracking-wider">የቀን ሰሌዳ</p>
+                  <h4 className="text-sm font-black text-amber-300 mt-1 truncate max-w-[160px]">
+                    {activeCourse?.schedule || 'አልተወሰነም'}
+                  </h4>
+                  <p className="text-[11px] text-indigo-200 mt-1">ክሬዲት: {activeCourse?.credits || 0}</p>
                 </div>
-                <div className="bg-white p-1.5 rounded-lg border border-amber-200">
-                  <strong className="text-amber-700 font-bold">60% – 69%</strong> ➔ C (አልፏል)
+                <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+                  <Calendar className="w-6 h-6 text-indigo-300" />
                 </div>
-                <div className="bg-white p-1.5 rounded-lg border border-amber-200">
-                  <strong className="text-orange-700 font-bold">50% – 59%</strong> ➔ D (ዝቅተኛ / ማለፊያ)
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-cyan-800 to-blue-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[11px] font-bold text-cyan-200 uppercase tracking-wider">የውጤት መመዘኛዎች</p>
+                  <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">
+                    {activeItems.length} መመዘኛ ({totalActiveWeight}%)
+                  </h3>
+                  <button
+                    onClick={() => setIsSchemeModalOpen(true)}
+                    className="text-[10px] font-bold text-cyan-200 hover:text-white underline mt-1 block cursor-pointer"
+                  >
+                    መመዘኛ ጨምር / ቀንስ ✎
+                  </button>
                 </div>
-                <div className="bg-white p-1.5 rounded-lg border border-amber-200">
-                  <strong className="text-rose-700 font-bold">ከ 50% በታች</strong> ➔ F (ወድቋል)
+                <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+                  <SlidersHorizontal className="w-6 h-6 text-cyan-300" />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Official Grading Scale Reference Card */}
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300/80 rounded-3xl p-5 space-y-2 shadow-2xs">
+            <p className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-amber-700" />
+              <span>ይፋዊ የውጤት መስፈርት (Official Grading Scale):</span>
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px] text-slate-800">
+              <div className="bg-white p-2 rounded-xl border border-emerald-200 shadow-2xs">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 mr-1">A+</span>
+                <strong className="text-emerald-800">90–100%</strong> (እጅግ በጣም ጥሩ)
+              </div>
+              <div className="bg-white p-2 rounded-xl border border-green-200 shadow-2xs">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-green-100 text-green-800 mr-1">A</span>
+                <strong className="text-green-800">80–89%</strong> (በጣም ጥሩ)
+              </div>
+              <div className="bg-white p-2 rounded-xl border border-indigo-200 shadow-2xs">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 mr-1">B</span>
+                <strong className="text-indigo-800">70–79%</strong> (ጥሩ)
+              </div>
+              <div className="bg-white p-2 rounded-xl border border-amber-200 shadow-2xs">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 mr-1">C</span>
+                <strong className="text-amber-800">60–69%</strong> (አልፏል)
+              </div>
+              <div className="bg-white p-2 rounded-xl border border-orange-200 shadow-2xs">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-orange-100 text-orange-800 mr-1">D</span>
+                <strong className="text-orange-800">50–59%</strong> (ዝቅተኛ)
+              </div>
+              <div className="bg-white p-2 rounded-xl border border-rose-200 shadow-2xs">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 mr-1">F</span>
+                <strong className="text-rose-800">&lt;50%</strong> (ወድቋል)
               </div>
             </div>
           </div>
@@ -385,32 +635,61 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   <button
                     onClick={() => setIsSchemeModalOpen(true)}
                     className="inline-flex items-center gap-1 text-[11px] text-emerald-800 hover:text-emerald-950 font-bold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl transition-all cursor-pointer shadow-2xs"
-                    title="የመመዘኛ ስሞችንና መቶኛዎችን ኤዲት ለማድረግ ይጫኑ"
+                    title="የመመዘኛ ስሞችንና መቶኛዎችን ኤዲት ለማድረግ፣ ለመጨመር ወይም ለመቀነስ ይጫኑ"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span>የመመዘኛ ስሞችና % ኤዲት</span>
+                    <span>መመዘኛ ጨምር / ቀንስ ({activeItems.length})</span>
                   </button>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {assessmentConfig.p1Label} ({assessmentConfig.p1Max}%) + {assessmentConfig.p2Label} ({assessmentConfig.p2Max}%) +{' '}
-                  {assessmentConfig.midLabel} ({assessmentConfig.midMax}%) + {assessmentConfig.finalLabel} ({assessmentConfig.finalMax}%) +{' '}
-                  {assessmentConfig.attLabel} ({assessmentConfig.attMax}%) = ድምር (100%)
+                  {activeItems.map((it) => `${it.label} (${it.max}%)`).join(' + ')} = ድምር ({totalActiveWeight}%)
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Direct quick button to Add Criterion */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAddCriterion();
+                    setIsSchemeModalOpen(true);
+                  }}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="አዲስ የውጤት መመዘኛ ጨምር"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>+ መመዘኛ ጨምር</span>
+                </button>
+
+                {/* Direct quick button to Remove Last Criterion */}
+                <button
+                  type="button"
+                  onClick={handleRemoveLastCriterion}
+                  disabled={activeItems.length <= 1}
+                  className={`text-xs px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
+                    activeItems.length <= 1
+                      ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 cursor-pointer'
+                  }`}
+                  title="የመጨረሻውን መመዘኛ ቀንስ"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>- መመዘኛ ቀንስ</span>
+                </button>
+
+                {/* Open Modal for Full Scheme Customization */}
                 <button
                   type="button"
                   onClick={() => setIsSchemeModalOpen(true)}
                   className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
-                  <Edit3 className="w-3.5 h-3.5 text-amber-700" />
-                  <span>መስፈርቶችና መቶኛ ኤዲት</span>
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-amber-700" />
+                  <span>መመዘኛዎችን ኤዲት አድርግ ({activeItems.length})</span>
                 </button>
 
                 <button
                   onClick={handleSaveAll}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2.5 rounded-xl font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2 rounded-xl font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>ውጤቶችን መዝግብ (Save All)</span>
@@ -422,61 +701,76 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
               <table className="w-full text-left text-xs text-slate-600">
                 <thead className="bg-slate-50 text-slate-700 font-bold uppercase text-[10px] rounded-lg">
                   <tr>
-                    <th className="p-2.5 border-b border-slate-200">ተ.ቁ</th>
-                    <th className="p-2.5 border-b border-slate-200">ID No</th>
-                    <th className="p-2.5 border-b border-slate-200">የተማሪ ስም</th>
-                    {/* Criterion 1 */}
-                    <th className="p-2.5 border-b border-slate-200 text-center w-20">
-                      <div className="flex flex-col items-center">
-                        <span>{assessmentConfig.p1Label}</span>
-                        <span className="text-[9px] text-emerald-800 font-mono">({assessmentConfig.p1Max}%)</span>
-                      </div>
+                    <th className="p-2.5 border-b border-slate-200 bg-slate-100">ተ.ቁ</th>
+                    <th className="p-2.5 border-b border-slate-200 bg-slate-100">ID No</th>
+                    <th className="p-2.5 border-b border-slate-200 bg-slate-100">የተማሪ ስም</th>
+                    
+                    {/* Dynamic Criteria Headers */}
+                    {activeItems.map((item, idx) => {
+                      const color = getCriterionColor(idx);
+                      return (
+                        <th
+                          key={item.id}
+                          className={`p-2.5 border-b-2 ${color.headerBorder} ${color.headerBg} text-center min-w-[95px] relative group`}
+                        >
+                          <div className="flex flex-col items-center">
+                            <div className="flex items-center gap-1 justify-center w-full">
+                              <span className="font-bold truncate max-w-[80px]" title={item.label}>
+                                {item.label}
+                              </span>
+                              {activeItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDirectRemoveCriterionFromTable(item.id, item.label);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-rose-600 hover:bg-rose-100 transition-opacity cursor-pointer"
+                                  title={`'${item.label}' መመዘኛን ቀንስ/ሰርዝ`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                            <span className="text-[9px] font-mono font-black">({item.max}%)</span>
+                          </div>
+                        </th>
+                      );
+                    })}
+
+                    {/* Quick Add Criterion Column Header Button */}
+                    <th className="p-1 border-b-2 border-dashed border-emerald-300 bg-emerald-50/40 text-center w-14">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAddCriterion();
+                          setIsSchemeModalOpen(true);
+                        }}
+                        className="w-full py-2 flex flex-col items-center justify-center text-emerald-800 hover:text-emerald-950 font-bold text-[9px] hover:bg-emerald-100/60 rounded-lg transition-colors cursor-pointer"
+                        title="አዲስ መመዘኛ ጨምር"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>ጨምር</span>
+                      </button>
                     </th>
-                    {/* Criterion 2 */}
-                    <th className="p-2.5 border-b border-slate-200 text-center w-20">
-                      <div className="flex flex-col items-center">
-                        <span>{assessmentConfig.p2Label}</span>
-                        <span className="text-[9px] text-emerald-800 font-mono">({assessmentConfig.p2Max}%)</span>
-                      </div>
-                    </th>
-                    {/* Criterion 3 */}
-                    <th className="p-2.5 border-b border-slate-200 text-center w-20">
-                      <div className="flex flex-col items-center">
-                        <span>{assessmentConfig.midLabel}</span>
-                        <span className="text-[9px] text-emerald-800 font-mono">({assessmentConfig.midMax}%)</span>
-                      </div>
-                    </th>
-                    {/* Criterion 4 */}
-                    <th className="p-2.5 border-b border-slate-200 text-center w-20">
-                      <div className="flex flex-col items-center">
-                        <span>{assessmentConfig.finalLabel}</span>
-                        <span className="text-[9px] text-emerald-800 font-mono">({assessmentConfig.finalMax}%)</span>
-                      </div>
-                    </th>
-                    {/* Criterion 5 */}
-                    <th className="p-2.5 border-b border-slate-200 text-center w-20">
-                      <div className="flex flex-col items-center">
-                        <span>{assessmentConfig.attLabel}</span>
-                        <span className="text-[9px] text-emerald-800 font-mono">({assessmentConfig.attMax}%)</span>
-                      </div>
-                    </th>
+
                     {/* Total (100%) - Editable */}
-                    <th className="p-2.5 border-b border-slate-200 text-center w-22">
-                      <div className="flex flex-col items-center text-emerald-950">
+                    <th className="p-2.5 border-b-2 border-emerald-600 bg-emerald-100 text-emerald-950 text-center w-22 font-black">
+                      <div className="flex flex-col items-center">
                         <span>ድምር</span>
-                        <span className="text-[9px] text-emerald-800 font-mono">(100%) ✎</span>
+                        <span className="text-[9px] text-emerald-800 font-mono">({totalActiveWeight}%) ✎</span>
                       </div>
                     </th>
                     {/* Letter Grade - Editable */}
-                    <th className="p-2.5 border-b border-slate-200 text-center w-24">
-                      <div className="flex flex-col items-center text-amber-950">
+                    <th className="p-2.5 border-b-2 border-amber-600 bg-amber-100 text-amber-950 text-center w-24 font-black">
+                      <div className="flex flex-col items-center">
                         <span>ፊደል ደረጃ</span>
                         <span className="text-[9px] text-amber-800">ምረጡ ✎</span>
                       </div>
                     </th>
                     {/* Meaning / Remark - Editable */}
-                    <th className="p-2.5 border-b border-slate-200 text-center min-w-[130px]">
-                      <div className="flex flex-col items-center text-slate-800">
+                    <th className="p-2.5 border-b-2 border-sky-400 bg-sky-50 text-sky-950 text-center min-w-[130px] font-bold">
+                      <div className="flex flex-col items-center">
                         <span>ትርጉም / አስተያየት</span>
                         <span className="text-[9px] text-slate-500">ኤዲት ✎</span>
                       </div>
@@ -486,11 +780,15 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {enrolledStudents.map((s, idx) => {
                     const g = localGrades[s.uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
-                    const partsSum =
-                      (g.p1 || 0) + (g.p2 || 0) + (g.mid || 0) + (g.final || 0) + (g.att || 0);
+                    
+                    // Compute dynamic parts sum
+                    const partsSum = activeItems.reduce(
+                      (sum, it, itIdx) => sum + getCriterionScore(g, it.id, itIdx),
+                      0
+                    );
                     const hasParts = partsSum > 0;
                     const hasCustomTotal = typeof g.customTotal === 'number' && !isNaN(g.customTotal);
-                    const eff = getEffectiveGradeValues(g);
+                    const eff = getEffectiveGradeValues(g, activeItems);
 
                     // Standard auto values
                     const effectiveTotal = hasCustomTotal ? g.customTotal! : partsSum;
@@ -503,92 +801,33 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                         <td className="p-2.5 font-mono font-bold text-slate-800">{s.id}</td>
                         <td className="p-2.5 font-bold text-slate-900">{s.name}</td>
 
-                        {/* 1. Criterion 1 */}
-                        <td className="p-2 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max={assessmentConfig.p1Max}
-                            step="0.5"
-                            placeholder="—"
-                            value={g.p1 === 0 ? '' : g.p1}
-                            onChange={(e) =>
-                              handleInputChange(s.uid, 'p1', e.target.value, assessmentConfig.p1Max)
-                            }
-                            className="w-16 px-1.5 py-1 text-center font-mono font-bold text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 bg-white placeholder:text-slate-300 shadow-2xs"
-                            title={`${assessmentConfig.p1Label} (ከ ${assessmentConfig.p1Max})`}
-                          />
-                        </td>
+                        {/* Dynamic Criteria Input Cells */}
+                        {activeItems.map((item, itemIdx) => {
+                          const color = getCriterionColor(itemIdx);
+                          const score = getCriterionScore(g, item.id, itemIdx);
+                          return (
+                            <td key={item.id} className="p-2 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                max={item.max}
+                                step="0.5"
+                                placeholder="—"
+                                value={score === 0 ? '' : score}
+                                onChange={(e) =>
+                                  handleCriterionScoreChange(s.uid, item.id, e.target.value, item.max, itemIdx)
+                                }
+                                className={`w-16 px-1.5 py-1 text-center font-mono font-bold text-xs border ${color.border} rounded-lg ${color.focus} bg-white placeholder:text-slate-300 shadow-2xs`}
+                                title={`${item.label} (ከ ${item.max}%)`}
+                              />
+                            </td>
+                          );
+                        })}
 
-                        {/* 2. Criterion 2 */}
-                        <td className="p-2 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max={assessmentConfig.p2Max}
-                            step="0.5"
-                            placeholder="—"
-                            value={g.p2 === 0 ? '' : g.p2}
-                            onChange={(e) =>
-                              handleInputChange(s.uid, 'p2', e.target.value, assessmentConfig.p2Max)
-                            }
-                            className="w-16 px-1.5 py-1 text-center font-mono font-bold text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 bg-white placeholder:text-slate-300 shadow-2xs"
-                            title={`${assessmentConfig.p2Label} (ከ ${assessmentConfig.p2Max})`}
-                          />
-                        </td>
+                        {/* Blank cell for the + ጨምር column */}
+                        <td className="p-1 text-center bg-emerald-50/10 border-r border-dashed border-emerald-100"></td>
 
-                        {/* 3. Criterion 3 */}
-                        <td className="p-2 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max={assessmentConfig.midMax}
-                            step="0.5"
-                            placeholder="—"
-                            value={g.mid === 0 ? '' : g.mid}
-                            onChange={(e) =>
-                              handleInputChange(s.uid, 'mid', e.target.value, assessmentConfig.midMax)
-                            }
-                            className="w-16 px-1.5 py-1 text-center font-mono font-bold text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 bg-white placeholder:text-slate-300 shadow-2xs"
-                            title={`${assessmentConfig.midLabel} (ከ ${assessmentConfig.midMax})`}
-                          />
-                        </td>
-
-                        {/* 4. Criterion 4 */}
-                        <td className="p-2 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max={assessmentConfig.finalMax}
-                            step="0.5"
-                            placeholder="—"
-                            value={g.final === 0 ? '' : g.final}
-                            onChange={(e) =>
-                              handleInputChange(s.uid, 'final', e.target.value, assessmentConfig.finalMax)
-                            }
-                            className="w-16 px-1.5 py-1 text-center font-mono font-bold text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 bg-white placeholder:text-slate-300 shadow-2xs"
-                            title={`${assessmentConfig.finalLabel} (ከ ${assessmentConfig.finalMax})`}
-                          />
-                        </td>
-
-                        {/* 5. Criterion 5 */}
-                        <td className="p-2 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max={assessmentConfig.attMax}
-                            step="0.5"
-                            placeholder="—"
-                            value={g.att === 0 ? '' : g.att}
-                            onChange={(e) =>
-                              handleInputChange(s.uid, 'att', e.target.value, assessmentConfig.attMax)
-                            }
-                            className="w-16 px-1.5 py-1 text-center font-mono font-bold text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 bg-white placeholder:text-slate-300 shadow-2xs"
-                            title={`${assessmentConfig.attLabel} (ከ ${assessmentConfig.attMax})`}
-                          />
-                        </td>
-
-                        {/* 6. Editable Total (ድምር 100%) */}
+                        {/* Editable Total (ድምር 100%) */}
                         <td className="p-2 text-center">
                           <div className="relative inline-block">
                             <input
@@ -630,7 +869,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                           </div>
                         </td>
 
-                        {/* 7. Editable Letter Grade (ፊደል ደረጃ) */}
+                        {/* Editable Letter Grade (ፊደል ደረጃ) */}
                         <td className="p-2 text-center">
                           <select
                             value={g.customLetter || ''}
@@ -654,7 +893,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                           </select>
                         </td>
 
-                        {/* 8. Editable Description / Meaning (ትርጉም) */}
+                        {/* Editable Description / Meaning (ትርጉም) */}
                         <td className="p-2 text-center">
                           <input
                             type="text"
@@ -702,22 +941,25 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         </>
       )}
 
-      {/* MODAL: Edit Assessment Criteria & Weights (ለመምህራን የመመዘኛዎች ማስተካከያ) */}
+      {/* MODAL: Edit Assessment Criteria & Weights with Add/Remove capability (መመዘኛ ለመጨመርና ለመቀነስ) */}
       {isSchemeModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full flex flex-col overflow-hidden border border-slate-200">
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full flex flex-col overflow-hidden border border-slate-200 my-auto animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-emerald-950 to-slate-900 text-white p-5 flex justify-between items-center">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-700/60 rounded-xl">
+            <div className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-slate-900 text-white px-6 py-4 flex justify-between items-center border-b border-emerald-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-700/60 rounded-xl shadow-inner">
                   <SlidersHorizontal className="w-5 h-5 text-amber-300" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-white">
-                    የውጤት መመዘኛዎችንና ክብደት ኤዲት ማድረጊያ
+                  <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                    <span>የውጤት መመዘኛዎችንና የመቶኛ ክብደት (%) ኤዲት ማድረጊያ</span>
+                    <span className="text-xs bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-lg">
+                      {editingItems.length} መመዘኛዎች
+                    </span>
                   </h3>
-                  <p className="text-[11px] text-emerald-200">
-                    ኮርስ: <strong>{activeCourse?.name}</strong> ({activeCourse?.program})
+                  <p className="text-xs text-emerald-200">
+                    ኮርስ: <span className="font-bold text-amber-300">{activeCourse?.name}</span> ({activeCourse?.program})
                   </p>
                 </div>
               </div>
@@ -726,190 +968,277 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 type="button"
                 onClick={() => setIsSchemeModalOpen(false)}
                 className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="ዝጋ"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={handleSaveScheme} className="p-6 space-y-5">
-              <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                መምህራን የመመዘኛዎቹን መጠሪያ ስሞች እና እያንዳንዱ መስፈርት የሚይዘውን የመቶኛ ክብደት (%) እዚህ ጋር ኤዲት ማድረግ ይችላሉ።
-              </p>
-
-              {/* 5 Assessment Criteria Rows */}
-              <div className="space-y-3">
-                {/* Criterion 1 */}
-                <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <span className="w-8 text-center font-bold text-xs text-slate-400">1</span>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">የመመዘኛ 1 ስም</label>
-                    <input
-                      type="text"
-                      value={editingScheme.p1Label}
-                      onChange={(e) => setEditingScheme({ ...editingScheme, p1Label: e.target.value })}
-                      required
-                      placeholder="ምሳሌ: ክፍል 1 ወይም አሳይመንት 1"
-                      className="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
+            <form onSubmit={handleSaveScheme} className="p-5 sm:p-6 space-y-4">
+              {/* Toolbar: Add criterion button, quick chips, presets, auto-balance */}
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-slate-700">ፈጣን አብነቶች (Presets):</span>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('2')}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      2 መመዘኛ (40/60)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('3')}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      3 መመዘኛ (30/30/40)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('4')}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      4 መመዘኛ (20/20/30/30)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('5')}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      5 መመዘኛ (20/20/30/20/10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('6')}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      6 መመዘኛ (15/15/10/25/25/10)
+                    </button>
                   </div>
-                  <div className="w-24">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">መቶኛ (%)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={editingScheme.p1Max}
-                      onChange={(e) =>
-                        setEditingScheme({ ...editingScheme, p1Max: Math.max(0, parseFloat(e.target.value) || 0) })
-                      }
-                      required
-                      className="w-full px-2 py-1.5 text-xs font-mono font-bold text-center border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
+
+                  {/* Quick-add chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-slate-500">በቀጥታ ጨምር:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleAddCriterion('አሳይመንት', 15)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 cursor-pointer"
+                    >
+                      + አሳይመንት (15%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddCriterion('ፕሮጀክት', 15)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border border-cyan-200 cursor-pointer"
+                    >
+                      + ፕሮጀክት (15%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddCriterion('የቡድን ስራ', 10)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 cursor-pointer"
+                    >
+                      + የቡድን ስራ (10%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddCriterion('የተግባር ፈተና', 20)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 cursor-pointer"
+                    >
+                      + የተግባር ፈተና (20%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddCriterion('የቤት ስራ', 10)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 cursor-pointer"
+                    >
+                      + የቤት ስራ (10%)
+                    </button>
                   </div>
                 </div>
 
-                {/* Criterion 2 */}
-                <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <span className="w-8 text-center font-bold text-xs text-slate-400">2</span>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">የመመዘኛ 2 ስም</label>
-                    <input
-                      type="text"
-                      value={editingScheme.p2Label}
-                      onChange={(e) => setEditingScheme({ ...editingScheme, p2Label: e.target.value })}
-                      required
-                      placeholder="ምሳሌ: ክፍል 2 ወይም የግል ስራ"
-                      className="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">መቶኛ (%)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={editingScheme.p2Max}
-                      onChange={(e) =>
-                        setEditingScheme({ ...editingScheme, p2Max: Math.max(0, parseFloat(e.target.value) || 0) })
-                      }
-                      required
-                      className="w-full px-2 py-1.5 text-xs font-mono font-bold text-center border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
-                  </div>
-                </div>
+                <div className="flex flex-wrap items-center gap-2 self-stretch lg:self-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={handleAutoBalance}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+                    title="ድምሩ 100% እንዲሆን በራስ-ሰር አስማማ"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span>100% አስማማ</span>
+                  </button>
 
-                {/* Criterion 3 */}
-                <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <span className="w-8 text-center font-bold text-xs text-slate-400">3</span>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">የመመዘኛ 3 ስም</label>
-                    <input
-                      type="text"
-                      value={editingScheme.midLabel}
-                      onChange={(e) => setEditingScheme({ ...editingScheme, midLabel: e.target.value })}
-                      required
-                      placeholder="ምሳሌ: ሚድ ፈተና"
-                      className="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">መቶኛ (%)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={editingScheme.midMax}
-                      onChange={(e) =>
-                        setEditingScheme({ ...editingScheme, midMax: Math.max(0, parseFloat(e.target.value) || 0) })
-                      }
-                      required
-                      className="w-full px-2 py-1.5 text-xs font-mono font-bold text-center border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
-                  </div>
-                </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveLastCriterion}
+                    disabled={editingItems.length <= 1}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs shadow-2xs transition-all ${
+                      editingItems.length <= 1
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 cursor-pointer'
+                    }`}
+                    title="የመጨረሻውን መመዘኛ ቀንስ"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>- መመዘኛ ቀንስ</span>
+                  </button>
 
-                {/* Criterion 4 */}
-                <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <span className="w-8 text-center font-bold text-xs text-slate-400">4</span>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">የመመዘኛ 4 ስም</label>
-                    <input
-                      type="text"
-                      value={editingScheme.finalLabel}
-                      onChange={(e) => setEditingScheme({ ...editingScheme, finalLabel: e.target.value })}
-                      required
-                      placeholder="ምሳሌ: ፋይናል ፈተና"
-                      className="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">መቶኛ (%)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={editingScheme.finalMax}
-                      onChange={(e) =>
-                        setEditingScheme({ ...editingScheme, finalMax: Math.max(0, parseFloat(e.target.value) || 0) })
-                      }
-                      required
-                      className="w-full px-2 py-1.5 text-xs font-mono font-bold text-center border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAddCriterion()}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ መመዘኛ ጨምር</span>
+                  </button>
                 </div>
+              </div>
 
-                {/* Criterion 5 */}
-                <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <span className="w-8 text-center font-bold text-xs text-slate-400">5</span>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">የመመዘኛ 5 ስም</label>
-                    <input
-                      type="text"
-                      value={editingScheme.attLabel}
-                      onChange={(e) => setEditingScheme({ ...editingScheme, attLabel: e.target.value })}
-                      required
-                      placeholder="ምሳሌ: ተሳትፎ ወይም ስነ ምግባር"
-                      className="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
+              {/* Dynamic Assessment Criteria Laid Out Horizontally Side-by-Side (ወደ ጎን) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 max-h-[50vh] overflow-y-auto p-1">
+                {editingItems.map((item, idx) => {
+                  const color = getCriterionColor(idx);
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3.5 rounded-2xl bg-gradient-to-b from-white to-slate-50/50 border-2 ${color.border} shadow-2xs space-y-2.5 relative group`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${color.badge}`}>
+                          መመዘኛ {idx + 1}
+                        </span>
+                        
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-mono text-xs font-black ${color.text}`}>
+                            {item.max}%
+                          </span>
+
+                          {/* Remove button (ቀንስ / አጥፋ) */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCriterion(idx)}
+                            disabled={editingItems.length <= 1}
+                            className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                              editingItems.length <= 1
+                                ? 'text-slate-300 cursor-not-allowed'
+                                : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                            }`}
+                            title={editingItems.length <= 1 ? 'ቢያንስ 1 መመዘኛ መኖር አለበት' : `ይህን መመዘኛ (${item.label}) ቀንስ/አጥፋ`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                          የመመዘኛ ስም
+                        </label>
+                        <input
+                          type="text"
+                          value={item.label}
+                          onChange={(e) => handleCriterionItemChange(idx, 'label', e.target.value)}
+                          required
+                          placeholder={`መመዘኛ ${idx + 1}`}
+                          className={`w-full px-2.5 py-1.5 text-xs font-bold border ${color.border} rounded-xl bg-white ${color.focus} text-slate-800 shadow-2xs`}
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-bold text-slate-600">
+                            መቶኛ ክብደት (%)
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleStepCriterionWeight(idx, -5)}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                              title="5% ቀንስ"
+                            >
+                              -5%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStepCriterionWeight(idx, +5)}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition-colors cursor-pointer"
+                              title="5% ጨምር"
+                            >
+                              +5%
+                            </button>
+                          </div>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={item.max}
+                          onChange={(e) => handleCriterionItemChange(idx, 'max', e.target.value)}
+                          required
+                          className={`w-full px-2 py-1.5 text-xs font-mono font-black text-center border ${color.border} rounded-xl bg-white ${color.focus} text-slate-900 shadow-2xs`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Big Card to add more criterion if needed */}
+                <button
+                  type="button"
+                  onClick={() => handleAddCriterion()}
+                  className="p-3.5 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px] text-emerald-800 font-bold text-xs cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
+                    <Plus className="w-5 h-5 text-emerald-800" />
                   </div>
-                  <div className="w-24">
-                    <label className="block text-[10px] font-bold text-slate-500 mb-0.5">መቶኛ (%)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={editingScheme.attMax}
-                      onChange={(e) =>
-                        setEditingScheme({ ...editingScheme, attMax: Math.max(0, parseFloat(e.target.value) || 0) })
-                      }
-                      required
-                      className="w-full px-2 py-1.5 text-xs font-mono font-bold text-center border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700"
-                    />
-                  </div>
-                </div>
+                  <span>+ አዲስ መመዘኛ ጨምር</span>
+                  <span className="text-[10px] font-normal text-slate-500">ለምሳሌ፡ አሳይመንት፣ ፕሮጀክት</span>
+                </button>
               </div>
 
               {/* Total Percentage Calculation Badge */}
               <div
-                className={`p-3 rounded-2xl flex justify-between items-center text-xs font-bold ${
+                className={`p-3.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs font-bold transition-all ${
                   totalSchemeWeight === 100
-                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-300'
-                    : 'bg-amber-50 text-amber-900 border border-amber-300'
+                    ? 'bg-emerald-50 text-emerald-950 border border-emerald-300 shadow-xs'
+                    : 'bg-amber-50 text-amber-950 border border-amber-300 shadow-xs'
                 }`}
               >
-                <span>የመመዘኛዎቹ ድምር መቶኛ (Total Weight):</span>
-                <span className="font-mono text-sm font-black">
-                  {totalSchemeWeight}% {totalSchemeWeight === 100 ? '✓ (ትክክል)' : '⚠️ (100% መሙላት ይመረጣል)'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${totalSchemeWeight === 100 ? 'text-emerald-700' : 'text-amber-700'}`} />
+                  <span>
+                    የመመዘኛዎቹ ድምር መቶኛ (Total Weight):{' '}
+                    <strong className="text-slate-900 font-mono">
+                      {editingItems.map((it) => it.max).join(' + ')}
+                    </strong>
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm sm:text-base font-black px-3 py-1 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                    = {totalSchemeWeight}% {totalSchemeWeight === 100 ? '✓ (ትክክል - 100%)' : '⚠️ (100% መሙላት ይመረጣል)'}
+                  </span>
+
+                  {totalSchemeWeight !== 100 && (
+                    <button
+                      type="button"
+                      onClick={handleAutoBalance}
+                      className="text-[11px] font-bold text-amber-800 underline hover:text-amber-950 cursor-pointer"
+                    >
+                      100% አስማማ
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Footer buttons */}
-              <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <div className="flex justify-between items-center pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={handleResetSchemeToDefault}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>ወደ ነባሪ መልስ (Reset Default)</span>
@@ -925,7 +1254,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-1.5 bg-emerald-800 hover:bg-emerald-900 text-white text-xs px-5 py-2.5 rounded-xl font-bold shadow-md transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 bg-emerald-800 hover:bg-emerald-900 text-white text-xs px-5 py-2.5 rounded-xl font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
                     <span>ቅንብሩን መዝግብ (Save Scheme)</span>

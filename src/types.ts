@@ -20,17 +20,24 @@ export interface Student {
   photoUrl?: string;
 }
 
+export interface AssessmentCriterionItem {
+  id: string;
+  label: string;
+  max: number;
+}
+
 export interface CourseAssessmentConfig {
-  p1Label: string;
-  p1Max: number;
-  p2Label: string;
-  p2Max: number;
-  midLabel: string;
-  midMax: number;
-  finalLabel: string;
-  finalMax: number;
-  attLabel: string;
-  attMax: number;
+  items?: AssessmentCriterionItem[];
+  p1Label?: string;
+  p1Max?: number;
+  p2Label?: string;
+  p2Max?: number;
+  midLabel?: string;
+  midMax?: number;
+  finalLabel?: string;
+  finalMax?: number;
+  attLabel?: string;
+  attMax?: number;
 }
 
 export interface Course {
@@ -50,6 +57,7 @@ export interface GradeBreakdown {
   mid: number;          // ሚድ ፈተና (max 30 default)
   final: number;        // ፋይናል (max 20 default)
   att: number;          // ተሳትፎ (max 10 default)
+  scores?: Record<string, number>; // dynamic criteria scores by criterion ID
   customTotal?: number; // ድምር (100%) - መምህራን በቀጥታ ኤዲት የሚያደርጉት
   customLetter?: string;// ፊደል ደረጃ - መምህራን በቀጥታ የሚመርጡት/የሚያርሙት
   customDesc?: string;  // ትርጉም - መምህራን በቀጥታ ኤዲት የሚያደርጉት

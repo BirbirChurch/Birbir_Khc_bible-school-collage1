@@ -76,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
                       [{getRoleAmharicName(currentUser.role)}]
                     </span>
                     <span className="font-medium text-slate-100 max-w-[140px] sm:max-w-[180px] truncate">
-                      {currentUser.name}
+                      {currentUser.role === 'TEACHER' ? 'መምህር (የተፈቀደላቸው)' : currentUser.name}
                     </span>
                   </div>
 

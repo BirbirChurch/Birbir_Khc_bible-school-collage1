@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Printer, ShieldCheck } from 'lucide-react';
 import { Course, GradeBreakdown, OfficialSignaturesConfig, Student } from '../types.ts';
-import { calculateGradeDetails, calculateStudentGPA, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
+import { calculateGradeDetails, calculateStudentGPA, getCourseAssessmentItems, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
 import { OFFICIAL_GRADING_SCALE } from '../data/initialData.ts';
 import { CHURCH_LOGO } from '../assets/logo.ts';
 
@@ -36,7 +36,7 @@ export const TranscriptModal: React.FC<TranscriptModalProps> = ({
   const courseRows = studentCourses.map((c, idx) => {
     const key = getGradeKey(student.uid, c.id, currentYear, currentSemester);
     const g = grades[key];
-    const eff = getEffectiveGradeValues(g);
+    const eff = getEffectiveGradeValues(g, getCourseAssessmentItems(c));
     const isGraded = eff.hasAny;
 
     totalCredits += c.credits;

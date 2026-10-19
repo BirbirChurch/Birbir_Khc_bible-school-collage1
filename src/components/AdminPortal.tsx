@@ -191,37 +191,64 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         </div>
       </div>
 
-      {/* Quick Access to other portals bar */}
-      <div className="bg-gradient-to-r from-emerald-950 to-slate-900 text-white p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-md">
-        <div>
-          <h4 className="font-bold text-xs text-amber-300">በቀጥታ ወደ ሌሎች ፖርታሎች ገብተው ያስተዳድሩ፦</h4>
-          <p className="text-[11px] text-emerald-200">አድሚን ወደ ማንኛውም ገጽ ገብቶ ማረም፣ ማስተካከልና ማዘዝ ይችላል</p>
+      {/* Executive Colorful Stat Cards (Clean and aesthetic) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-emerald-800 to-teal-900 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider">የተመዘገቡ ተማሪዎች</p>
+              <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">{students.length}</h3>
+              <p className="text-[11px] text-emerald-300 mt-1">ዲፕሎማና ድግሪ ፕሮግራሞች</p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <Users className="w-6 h-6 text-emerald-300" />
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => onSwitchView('DEAN')}
-            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
-          >
-            🎓 የዋና ዲን ገጽ
-          </button>
-          <button
-            onClick={() => onSwitchView('REGISTRAR')}
-            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
-          >
-            📑 የሪጅስተራል ገጽ
-          </button>
-          <button
-            onClick={() => onSwitchView('TEACHER')}
-            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
-          >
-            📖 የመምህራን ገጽ
-          </button>
-          <button
-            onClick={() => onSwitchView('STUDENT')}
-            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
-          >
-            👨‍🎓 የተማሪዎች ገጽ
-          </button>
+
+        <div className="bg-gradient-to-br from-amber-700 to-orange-900 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-amber-200 uppercase tracking-wider">መምህራን በቁልፍ የሚገቡ</p>
+              <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">
+                {teachers.filter((t) => !t.includes('—')).length}
+              </h3>
+              <p className="text-[11px] text-amber-200 mt-1">በየግል ሚስጥር ቁልፍ ብቻ</p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <GraduationCap className="w-6 h-6 text-amber-300" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-indigo-800 to-slate-900 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-indigo-200 uppercase tracking-wider">የትምህርት ዓይነቶች (Courses)</p>
+              <h3 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1">{courses.length}</h3>
+              <p className="text-[11px] text-indigo-300 mt-1">{currentYear} ዓ.ም ({currentSemester}ኛ ሴሚስተር)</p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <BookOpen className="w-6 h-6 text-indigo-300" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-cyan-800 to-blue-950 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-cyan-200 uppercase tracking-wider">የደህንነትና የመረጃ ሁኔታ</p>
+              <h3 className="text-lg sm:text-xl font-black text-white mt-1.5 flex items-center gap-1.5">
+                {systemLocked ? 'ጥገና ሁነታ' : 'ቀጥታ ስራ ላይ'}
+              </h3>
+              <p className="text-[11px] text-cyan-300 mt-1">
+                ውጤት: {gradePublished ? 'ይፋ ሆኗል' : 'ተሰውሯል'}
+              </p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-xs">
+              <Shield className="w-6 h-6 text-cyan-300" />
+            </div>
+          </div>
         </div>
       </div>
 

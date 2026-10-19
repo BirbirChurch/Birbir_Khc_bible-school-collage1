@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Award, Calendar, BookOpen, Clock, Printer, AlertTriangle, CheckCircle2, Bookmark } from 'lucide-react';
 import { Course, GradeBreakdown, Student } from '../types.ts';
-import { calculateGradeDetails, calculateStudentGPA, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
+import { calculateGradeDetails, calculateStudentGPA, getCourseAssessmentItems, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
 
 interface StudentPortalProps {
   student: Student;
@@ -120,7 +120,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                 {studentCourses.map((c, idx) => {
                   const key = getGradeKey(student.uid, c.id, currentYear, currentSemester);
                   const g = grades[key];
-                  const eff = getEffectiveGradeValues(g);
+                  const eff = getEffectiveGradeValues(g, getCourseAssessmentItems(c));
 
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
