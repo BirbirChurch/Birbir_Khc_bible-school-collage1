@@ -13,6 +13,7 @@ import { CourseModal } from './components/CourseModal.tsx';
 import { StudentModal } from './components/StudentModal.tsx';
 import { PhotoModal } from './components/PhotoModal.tsx';
 import { FirebaseStatusModal } from './components/FirebaseStatusModal.tsx';
+import { DailyVerseBanner } from './components/DailyVerseBanner.tsx';
 import { firebaseConfig } from './firebase.ts';
 import { getStoredChurchLogo, saveChurchLogo, DEFAULT_CHURCH_LOGO } from './assets/logo.ts';
 
@@ -854,7 +855,7 @@ export default function App() {
       />
 
       {/* Main Body */}
-      <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {!currentUser ? (
           <LoginView
             students={students}
@@ -873,6 +874,9 @@ export default function App() {
           />
         ) : (
           <>
+            {/* Daily Verse of the Day - Only shown after user logs in, one verse per day (እያንዳንዱ ወደ ገጹ ከገባ በሃላ) */}
+            <DailyVerseBanner showNotify={showNotification} />
+
             {effectiveView === 'ADMIN' && (
               <AdminPortal
                 systemLocked={systemLocked}

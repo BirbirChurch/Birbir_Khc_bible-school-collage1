@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   GraduationCap,
   Save,
@@ -14,7 +14,13 @@ import {
   Plus,
   Trash2,
   Sparkles,
-  Layers
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  MoveHorizontal
 } from 'lucide-react';
 import { AssessmentCriterionItem, Course, CourseAssessmentConfig, GradeBreakdown, Student } from '../types.ts';
 import {
@@ -74,6 +80,17 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
 
   // Assessment Scheme Modal State & Dynamic criteria list
   const [isSchemeModalOpen, setIsSchemeModalOpen] = useState(false);
+  const [isInlineEditorOpen, setIsInlineEditorOpen] = useState(true);
+  const [modalViewMode, setModalViewMode] = useState<'horizontal' | 'grid'>('horizontal');
+  const inlineScrollRef = useRef<HTMLDivElement>(null);
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollHorizontal = (ref: React.RefObject<HTMLDivElement | null>, direction: 'left' | 'right') => {
+    if (ref.current) {
+      const amount = direction === 'left' ? -280 : 280;
+      ref.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  };
 
   useEffect(() => {
     if (teacherCourses.length > 0 && (!selectedCourseId || !teacherCourses.some((c) => c.id === selectedCourseId))) {
@@ -283,8 +300,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   };
 
   // Save customized assessment criteria & weights
-  const handleSaveScheme = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveEditingScheme = () => {
     if (!activeCourse) return;
 
     const totalWeight = editingItems.reduce((sum, item) => sum + (Number(item.max) || 0), 0);
@@ -319,6 +335,11 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
       `የኮርሱ የውጤት መመዘኛዎችና መቶኛዎች በስኬት ተስተካክለዋል! (${editingItems.length} መመዘኛዎች፣ ጠቅላላ መቶኛ፡ ${totalWeight}%)`,
       'success'
     );
+  };
+
+  const handleSaveScheme = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSaveEditingScheme();
   };
 
   const handleResetSchemeToDefault = () => {
@@ -647,12 +668,28 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {/* Toggle Inline Horizontal Criteria Editor */}
+                <button
+                  type="button"
+                  onClick={() => setIsInlineEditorOpen((prev) => !prev)}
+                  className={`text-xs px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                    isInlineEditorOpen
+                      ? 'bg-emerald-800 text-white shadow-sm'
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300'
+                  }`}
+                  title="የመመዘኛ ስሞችንና መቶኛዎችን እዚህ ጋር ወደ ጎን ኤዲት ማድረጊያ አሳይ/ደብቅ"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>የመመዘኛ ኤዲተር (ወደ ጎን)</span>
+                  {isInlineEditorOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+
                 {/* Direct quick button to Add Criterion */}
                 <button
                   type="button"
                   onClick={() => {
                     handleAddCriterion();
-                    setIsSchemeModalOpen(true);
+                    setIsInlineEditorOpen(true);
                   }}
                   className="bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                   title="አዲስ የውጤት መመዘኛ ጨምር"
@@ -681,10 +718,11 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsSchemeModalOpen(true)}
-                  className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="በሙሉ መስኮት (Modal) ለማስተካከል"
                 >
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-amber-700" />
-                  <span>መመዘኛዎችን ኤዲት አድርግ ({activeItems.length})</span>
+                  <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                  <span>ሙሉ መስኮት</span>
                 </button>
 
                 <button
@@ -696,6 +734,300 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Inline Horizontal Criteria Editor ("እዚህ ጋር ኤዲት ማድረጊያ - ወደ ጎን የሚንሸራተት") */}
+            {isInlineEditorOpen && (
+              <div className="bg-gradient-to-r from-slate-50 via-emerald-50/25 to-slate-50 border-2 border-emerald-300 rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-xs transition-all animate-in fade-in duration-200">
+                {/* Top Control Bar of Inline Editor */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-200/80 pb-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="p-2 rounded-xl bg-emerald-700 text-white shadow-xs">
+                      <SlidersHorizontal className="w-4 h-4 text-amber-300" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <span>የመመዘኛ ስሞች እና የመቶኛ ክብደት (%) ኤዲት ማድረጊያ</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <MoveHorizontal className="w-3 h-3 text-emerald-700" />
+                          <span>ወደ ጎን የሚንሸራተት</span>
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-600">
+                        የመመዘኛ መጠሪያ ስሞችንና መቶኛዎችን (%) እዚህ ጋር በቀጥታ ይቀይሩ፤ መመዘኛ ለመጨመር ወይም ለመቀነስ ከስር ያሉትን ይጠቀሙ።
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto justify-end">
+                    {/* Left & Right Horizontal Scroll Buttons */}
+                    <div className="inline-flex items-center gap-1 bg-white border border-slate-300 rounded-xl p-0.5 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => scrollHorizontal(inlineScrollRef, 'left')}
+                        className="p-1.5 rounded-lg text-slate-700 hover:text-emerald-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="ወደ ግራ ሸብልል"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-[10px] font-bold text-slate-500 px-1">ወደ ጎን</span>
+                      <button
+                        type="button"
+                        onClick={() => scrollHorizontal(inlineScrollRef, 'right')}
+                        className="p-1.5 rounded-lg text-slate-700 hover:text-emerald-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="ወደ ቀኝ ሸብልል"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Auto Balance to 100% */}
+                    <button
+                      type="button"
+                      onClick={handleAutoBalance}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+                      title="ድምሩ 100% እንዲሆን በራስ-ሰር አስማማ"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>100% አስማማ</span>
+                    </button>
+
+                    {/* Save Scheme Button */}
+                    <button
+                      type="button"
+                      onClick={handleSaveEditingScheme}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+                      title="የተስተካከሉትን የመመዘኛ ስሞችና መቶኛዎች መዝግብ"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>መመዘኛዎችን መዝግብ</span>
+                    </button>
+
+                    {/* Reset to Default */}
+                    <button
+                      type="button"
+                      onClick={handleResetSchemeToDefault}
+                      className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white border border-transparent hover:border-slate-300 transition-colors cursor-pointer"
+                      title="ወደ ነባሪ መልስ"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Presets & Quick Add Chips */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-700">ፈጣን አብነቶች:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('2')}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      2 መመዘኛ (40/60)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('3')}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      3 መመዘኛ (30/30/40)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('4')}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      4 መመዘኛ (20/20/30/30)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('5')}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      5 መመዘኛ (20/20/30/20/10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('6')}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer"
+                    >
+                      6 መመዘኛ (15/15/10/25/25/10)
+                    </button>
+                  </div>
+
+                  {/* Total Weight Status Pill */}
+                  <div
+                    className={`px-3 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 border shadow-2xs ${
+                      totalSchemeWeight === 100
+                        ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
+                        : 'bg-amber-100 text-amber-950 border-amber-400'
+                    }`}
+                  >
+                    <CheckCircle2 className={`w-3.5 h-3.5 ${totalSchemeWeight === 100 ? 'text-emerald-700' : 'text-amber-700'}`} />
+                    <span>ጠቅላላ መቶኛ፡ {totalSchemeWeight}% {totalSchemeWeight === 100 ? '✓ ትክክል' : `(${100 - totalSchemeWeight > 0 ? `+${100 - totalSchemeWeight}% ይቀራል` : `${totalSchemeWeight - 100}% በልጧል`})`}</span>
+                  </div>
+                </div>
+
+                {/* Quick Add Criterion Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[10px] font-bold text-slate-600">በቀጥታ ጨምር:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleAddCriterion('አሳይመንት', 15)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100/70 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 cursor-pointer"
+                  >
+                    + አሳይመንት (15%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddCriterion('ፕሮጀክት', 15)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-100/70 hover:bg-cyan-200 text-cyan-900 border border-cyan-300 cursor-pointer"
+                  >
+                    + ፕሮጀክት (15%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddCriterion('የቡድን ስራ', 10)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100/70 hover:bg-purple-200 text-purple-900 border border-purple-300 cursor-pointer"
+                  >
+                    + የቡድን ስራ (10%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddCriterion('የተግባር ፈተና', 20)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100/70 hover:bg-amber-200 text-amber-900 border border-amber-300 cursor-pointer"
+                  >
+                    + የተግባር ፈተና (20%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddCriterion('የቤት ስራ', 10)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100/70 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 cursor-pointer"
+                  >
+                    + የቤት ስራ (10%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveLastCriterion}
+                    disabled={editingItems.length <= 1}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                      editingItems.length <= 1
+                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                        : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 cursor-pointer'
+                    }`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>- የመጨረሻውን ቀንስ</span>
+                  </button>
+                </div>
+
+                {/* HORIZONTAL SCROLL TRACK - Cards laid out side-by-side (ወደ ጎን) */}
+                <div
+                  ref={inlineScrollRef}
+                  className="overflow-x-auto flex items-stretch gap-3 pb-3 pt-1 scrollbar-thin scroll-smooth"
+                >
+                  {editingItems.map((item, idx) => {
+                    const color = getCriterionColor(idx);
+                    return (
+                      <div
+                        key={item.id}
+                        className={`min-w-[215px] max-w-[245px] flex-shrink-0 bg-white border-2 ${color.border} rounded-2xl p-3 shadow-2xs space-y-2 relative group hover:shadow-sm transition-all`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${color.badge}`}>
+                            መመዘኛ {idx + 1}
+                          </span>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-mono text-xs font-black ${color.text}`}>
+                              {item.max}%
+                            </span>
+
+                            {/* Remove button (ቀንስ / አጥፋ) */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCriterion(idx)}
+                              disabled={editingItems.length <= 1}
+                              className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                                editingItems.length <= 1
+                                  ? 'text-slate-300 cursor-not-allowed'
+                                  : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                              }`}
+                              title={editingItems.length <= 1 ? 'ቢያንስ 1 መመዘኛ መኖር አለበት' : `ይህን መመዘኛ (${item.label}) ቀንስ/አጥፋ`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                            የመመዘኛ ስም
+                          </label>
+                          <input
+                            type="text"
+                            value={item.label}
+                            onChange={(e) => handleCriterionItemChange(idx, 'label', e.target.value)}
+                            required
+                            placeholder={`መመዘኛ ${idx + 1}`}
+                            className={`w-full px-2.5 py-1 text-xs font-bold border ${color.border} rounded-xl bg-white ${color.focus} text-slate-800 shadow-2xs`}
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between items-center mb-0.5">
+                            <label className="text-[10px] font-bold text-slate-600">
+                              መቶኛ ክብደት (%)
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStepCriterionWeight(idx, -5)}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                title="5% ቀንስ"
+                              >
+                                -5%
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStepCriterionWeight(idx, +5)}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition-colors cursor-pointer"
+                                title="5% ጨምር"
+                              >
+                                +5%
+                              </button>
+                            </div>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={item.max}
+                            onChange={(e) => handleCriterionItemChange(idx, 'max', e.target.value)}
+                            required
+                            className={`w-full px-2 py-1 text-xs font-mono font-black text-center border ${color.border} rounded-xl bg-white ${color.focus} text-slate-900 shadow-2xs`}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Add New Criterion Card in the horizontal row */}
+                  <button
+                    type="button"
+                    onClick={() => handleAddCriterion()}
+                    className="min-w-[175px] flex-shrink-0 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-100/60 transition-all flex flex-col items-center justify-center gap-1.5 p-3 text-emerald-800 font-bold text-xs cursor-pointer group"
+                    title="አዲስ መመዘኛ ጨምር"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
+                      <Plus className="w-4 h-4 text-emerald-800" />
+                    </div>
+                    <span>+ መመዘኛ ጨምር</span>
+                    <span className="text-[9px] font-normal text-slate-500">ወደ ጎን ይታከላል</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-600">
@@ -1060,6 +1392,57 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 self-stretch lg:self-auto justify-end">
+                  {/* View Mode Toggle (ወደ ጎን vs ፍርግርግ) */}
+                  <div className="inline-flex items-center bg-white border border-slate-300 rounded-xl p-0.5 shadow-2xs text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setModalViewMode('horizontal')}
+                      className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors cursor-pointer ${
+                        modalViewMode === 'horizontal'
+                          ? 'bg-emerald-700 text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                      title="መመዘኛዎችን ወደ ጎን (Horizontally) አሳይ"
+                    >
+                      <MoveHorizontal className="w-3.5 h-3.5" />
+                      <span>ወደ ጎን</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalViewMode('grid')}
+                      className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors cursor-pointer ${
+                        modalViewMode === 'grid'
+                          ? 'bg-emerald-700 text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                      title="መመዘኛዎችን በፍርግርግ (Grid) አሳይ"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span>ፍርግርግ</span>
+                    </button>
+                  </div>
+
+                  {modalViewMode === 'horizontal' && (
+                    <div className="inline-flex items-center gap-1 bg-white border border-slate-300 rounded-xl p-0.5 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => scrollHorizontal(modalScrollRef, 'left')}
+                        className="p-1 rounded-lg text-slate-700 hover:text-emerald-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="ወደ ግራ ሸብልል"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollHorizontal(modalScrollRef, 'right')}
+                        className="p-1 rounded-lg text-slate-700 hover:text-emerald-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="ወደ ቀኝ ሸብልል"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleAutoBalance}
@@ -1096,14 +1479,25 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 </div>
               </div>
 
-              {/* Dynamic Assessment Criteria Laid Out Horizontally Side-by-Side (ወደ ጎን) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 max-h-[50vh] overflow-y-auto p-1">
+              {/* Dynamic Assessment Criteria Laid Out Side-by-Side (ወደ ጎን) OR Grid */}
+              <div
+                ref={modalScrollRef}
+                className={
+                  modalViewMode === 'horizontal'
+                    ? 'overflow-x-auto flex items-stretch gap-3.5 pb-3 pt-1 scrollbar-thin scroll-smooth'
+                    : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 max-h-[50vh] overflow-y-auto p-1'
+                }
+              >
                 {editingItems.map((item, idx) => {
                   const color = getCriterionColor(idx);
                   return (
                     <div
                       key={item.id}
-                      className={`p-3.5 rounded-2xl bg-gradient-to-b from-white to-slate-50/50 border-2 ${color.border} shadow-2xs space-y-2.5 relative group`}
+                      className={`${
+                        modalViewMode === 'horizontal'
+                          ? 'min-w-[220px] max-w-[260px] flex-shrink-0'
+                          : ''
+                      } p-3.5 rounded-2xl bg-gradient-to-b from-white to-slate-50/50 border-2 ${color.border} shadow-2xs space-y-2.5 relative group`}
                     >
                       <div className="flex items-center justify-between">
                         <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${color.badge}`}>
@@ -1188,7 +1582,9 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleAddCriterion()}
-                  className="p-3.5 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px] text-emerald-800 font-bold text-xs cursor-pointer group"
+                  className={`${
+                    modalViewMode === 'horizontal' ? 'min-w-[180px] flex-shrink-0' : ''
+                  } p-3.5 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px] text-emerald-800 font-bold text-xs cursor-pointer group`}
                 >
                   <div className="w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
                     <Plus className="w-5 h-5 text-emerald-800" />

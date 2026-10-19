@@ -170,17 +170,17 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
             </div>
           </div>
 
-          {/* Inspirational Bible Verse */}
-          <div className="bg-gradient-to-br from-emerald-900 to-slate-900 text-white rounded-3xl p-6 shadow-sm border border-emerald-800 space-y-2">
+          {/* Student Spiritual Guidance & Academic Motto */}
+          <div className="bg-gradient-to-br from-emerald-900 to-slate-900 text-white rounded-3xl p-6 shadow-sm border border-emerald-800 space-y-2 relative overflow-hidden">
             <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
-              <Bookmark className="w-4 h-4 text-amber-400" />
-              <span>የእለቱ መጽሐፍ ቅዱሳዊ ቃል</span>
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>የተማሪዎች መንፈሳዊ መመሪያ</span>
             </div>
-            <p className="text-xs text-emerald-100 italic leading-relaxed">
-              "የእግዚአብሔር ሰው ፍጹምና ለበጎ ሥራ ሁሉ የተዘጋጀ ይሆን ዘንድ፥ የእግዚአብሔር መንፈስ ያለበት መጽሐፍ ሁሉ ለትምህርትና ለተግሣጽ ልብንም ለማቅናት በጽድቅም ላለው ምክር ደግሞ ይጠቅማል።"
+            <p className="text-xs text-emerald-100 leading-relaxed font-sans">
+              በትምህርት ወቅት በትጋት፣ በጸሎትና በአክብሮት በመገኘት የቤተ ክርስቲያንን አደራ በታማኝነት መወጣት ይገባል።
             </p>
-            <p className="text-[11px] text-amber-300 font-bold text-right pt-1">
-              2ኛ ጢሞቴዎስ 3:16-17
+            <p className="text-[11px] text-amber-300/90 font-medium pt-1">
+              ቅድስት ሥላሴ መንፈሳዊ ኮሌጅ
             </p>
           </div>
         </div>
