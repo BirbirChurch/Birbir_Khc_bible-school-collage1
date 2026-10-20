@@ -31,13 +31,19 @@ import {
   UserCheck,
   UserX,
   X,
-  Sparkles
+  Sparkles,
+  Save
 } from 'lucide-react';
 import { GradingScaleItem, Student, Course, GradeBreakdown, OfficialSignaturesConfig } from '../types.ts';
 import { OFFICIAL_GRADING_SCALE, generateTeacherKey } from '../data/initialData.ts';
 import { FirebaseConnectionReport } from '../services/firebaseSync.ts';
 import { DEFAULT_CHURCH_LOGO } from '../assets/logo.ts';
 import { OfficialSignaturesManager } from './OfficialSignaturesManager.tsx';
+import { ExcelUploadModal } from './ExcelUploadModal.tsx';
+import { CourseGradeReportPdfModal } from './CourseGradeReportPdfModal.tsx';
+import { exportCourseGradesToExcel } from '../utils/excelUtils.ts';
+import { getCourseAssessmentItems, getCriterionScore, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
+import { getCriterionColor } from './TeacherPortal.tsx';
 
 interface AdminPortalProps {
   systemLocked: boolean;
@@ -73,6 +79,7 @@ interface AdminPortalProps {
   officialConfig: OfficialSignaturesConfig;
   onSaveOfficialConfig: (updated: OfficialSignaturesConfig) => void;
   onClearAllGrades?: () => void;
+  onSaveGrades?: (updatedGrades: Record<string, GradeBreakdown>) => void;
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
@@ -108,7 +115,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   showNotify,
   officialConfig,
   onSaveOfficialConfig,
-  onClearAllGrades
+  onClearAllGrades,
+  onSaveGrades
 }) => {
   const [adminTab, setAdminTab] = useState<'security' | 'teachers' | 'courses' | 'students' | 'official_signatures'>('security');
   const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
@@ -117,6 +125,112 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [showAllKeys, setShowAllKeys] = useState(false);
   const [copiedTeacher, setCopiedTeacher] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  // Admin Course Grade Entry (Excel Upload, Download, PDF) State
+  const [adminSelectedCourseId, setAdminSelectedCourseId] = useState<string>(courses[0]?.id || '');
+  const [isExcelUploadOpen, setIsExcelUploadOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [adminLocalGrades, setAdminLocalGrades] = useState<Record<string, GradeBreakdown>>({});
+
+  const adminSelectedCourse = courses.find((c) => c.id === adminSelectedCourseId) || courses[0];
+  const adminEnrolledStudents = adminSelectedCourse
+    ? students.filter((s) => s.program === adminSelectedCourse.program)
+    : [];
+
+  React.useEffect(() => {
+    if (!adminSelectedCourse) return;
+    const initial: Record<string, GradeBreakdown> = {};
+    adminEnrolledStudents.forEach((s) => {
+      const key = getGradeKey(s.uid, adminSelectedCourse.id, currentYear, currentSemester);
+      initial[s.uid] = grades[key] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+    });
+    setAdminLocalGrades(initial);
+  }, [adminSelectedCourseId, adminSelectedCourse?.id, adminEnrolledStudents.length, grades, currentYear, currentSemester]);
+
+  // Export course grades to Excel (.xlsx) for Admin
+  const handleExportAdminCourseExcel = () => {
+    if (!adminSelectedCourse) return;
+    exportCourseGradesToExcel(
+      adminSelectedCourse,
+      adminEnrolledStudents,
+      adminLocalGrades,
+      currentYear,
+      currentSemester
+    );
+    showNotify?.(`የ${adminSelectedCourse.name} ውጤት ኤክሴል ሰነድ (.xlsx) በስኬት ወርዷል!`, 'success');
+  };
+
+  // Apply imported Excel scores for Admin
+  const handleApplyAdminImportedScores = (scoresByUid: Record<string, Record<string, number>>) => {
+    if (!adminSelectedCourse) return;
+    setAdminLocalGrades((prev) => {
+      const next = { ...prev };
+      Object.entries(scoresByUid).forEach(([uid, newScores]) => {
+        const current = next[uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+        const currentScores = current.scores ? { ...current.scores } : {};
+        Object.entries(newScores).forEach(([itemId, scoreVal]) => {
+          currentScores[itemId] = scoreVal;
+        });
+        next[uid] = {
+          ...current,
+          scores: currentScores,
+          p1: currentScores['p1'] ?? currentScores['crit_1'] ?? current.p1,
+          p2: currentScores['p2'] ?? currentScores['crit_2'] ?? current.p2,
+          mid: currentScores['mid'] ?? currentScores['crit_3'] ?? current.mid,
+          final: currentScores['final'] ?? currentScores['crit_4'] ?? current.final,
+          att: currentScores['att'] ?? currentScores['crit_5'] ?? current.att
+        };
+      });
+      return next;
+    });
+    showNotify?.('ውጤቶች ከኤክሴል ተጭነዋል! ለውጦቹን ለማስቀረት «ለውጦችን መዝግብ» የሚለውን ይጫኑ', 'info');
+  };
+
+  // Save modified course grades for Admin
+  const handleSaveAdminGrades = () => {
+    if (!adminSelectedCourse || !onSaveGrades) return;
+    const updated = { ...grades };
+    adminEnrolledStudents.forEach((s) => {
+      const key = getGradeKey(s.uid, adminSelectedCourse.id, currentYear, currentSemester);
+      updated[key] = adminLocalGrades[s.uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+    });
+    onSaveGrades(updated);
+    showNotify?.('የተስተካከሉት ውጤቶች በስኬት ተመዝግበዋል!', 'success');
+  };
+
+  // Handle cell edit for Admin
+  const handleAdminScoreChange = (
+    studentUid: string,
+    itemId: string,
+    val: string,
+    maxVal: number,
+    itemIndex: number
+  ) => {
+    const clean = val.trim();
+    let num = clean === '' ? 0 : parseFloat(clean);
+    if (isNaN(num)) num = 0;
+    if (num < 0) num = 0;
+    if (num > maxVal) num = maxVal;
+
+    setAdminLocalGrades((prev) => {
+      const current = prev[studentUid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+      const currentScores = current.scores ? { ...current.scores } : {};
+      currentScores[itemId] = num;
+
+      return {
+        ...prev,
+        [studentUid]: {
+          ...current,
+          scores: currentScores,
+          p1: itemIndex === 0 ? num : (currentScores['p1'] ?? current.p1),
+          p2: itemIndex === 1 ? num : (currentScores['p2'] ?? current.p2),
+          mid: itemIndex === 2 ? num : (currentScores['mid'] ?? current.mid),
+          final: itemIndex === 3 ? num : (currentScores['final'] ?? current.final),
+          att: itemIndex === 4 ? num : (currentScores['att'] ?? current.att)
+        }
+      };
+    });
+  };
   const [showAddTeacherModal, setShowAddTeacherModal] = useState(false);
   const [newTeacherName, setNewTeacherName] = useState('');
   const [newTeacherCustomKey, setNewTeacherCustomKey] = useState('');
@@ -962,6 +1076,169 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </tbody>
             </table>
           </div>
+
+          {/* Integrated Course Grade Supervision with Excel Upload, Download & PDF */}
+          <div className="pt-6 border-t border-slate-200 space-y-4">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <GraduationCap className="w-5 h-5 text-emerald-800" />
+                  <span>የመምህራን ውጤት መቆጣጠሪያ፣ ኤክሴል መጫኛ/ማውረጃ እና ፒዲኤፍ (Grade Management)</span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  የትምህርት ዘመን {currentYear} ዓ.ም ({currentSemester}ኛ ሴሚስተር) — መምህር: <span className="font-bold text-slate-700">{adminSelectedCourse?.teacher}</span> | የተመዘገቡ: <span className="font-bold text-slate-700">{adminEnrolledStudents.length}</span>
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={adminSelectedCourseId}
+                  onChange={(e) => setAdminSelectedCourseId(e.target.value)}
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-300 bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-700 cursor-pointer"
+                >
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      [{c.program}] {c.name} — {c.teacher}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setIsExcelUploadOpen(true)}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-400 text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="ውጤት ከማይክሮሶፍት ኤክሴል (.xlsx / .csv) ለመጫን"
+                >
+                  <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ኤክሴል ጫን (Upload)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportAdminCourseExcel}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-400 text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="የዚህን ኮርስ ውጤት በኤክሴል (.xlsx) ለማውረድ"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ኤክሴል አውርድ (.xlsx)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPdfModalOpen(true)}
+                  className="bg-cyan-50 hover:bg-cyan-100 text-cyan-950 border border-cyan-300 text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="ይፋዊ የውጤት ሰነድ ለማተም ወይም በፒዲኤፍ (PDF) ለማስቀመጥ"
+                >
+                  <Printer className="w-3.5 h-3.5 text-cyan-700" />
+                  <span>ይፋዊ ሰነድ (PDF)</span>
+                </button>
+
+                {onSaveGrades && (
+                  <button
+                    type="button"
+                    onClick={handleSaveAdminGrades}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>ለውጦችን መዝግብ</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onSwitchView('TEACHER')}
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs px-3 py-1.5 rounded-xl font-bold shadow-2xs cursor-pointer flex items-center gap-1"
+                  title="በመምህራን የውጤት መሙያ ገጽ ሙሉ በሙሉ ክፈት"
+                >
+                  <span>በመምህራን ገጽ ክፈት</span>
+                </button>
+              </div>
+            </div>
+
+            {(() => {
+              if (!adminSelectedCourse) {
+                return <div className="text-xs text-slate-500 py-4 text-center">ኮርስ ይምረጡ።</div>;
+              }
+
+              const criteria = getCourseAssessmentItems(adminSelectedCourse);
+              const totalWeight = criteria.reduce((sum, it) => sum + (Number(it.max) || 0), 0);
+
+              return (
+                <div className="overflow-x-auto max-h-96 overflow-y-auto border border-slate-200 rounded-2xl">
+                  <table className="w-full text-left text-xs text-slate-600">
+                    <thead className="bg-slate-100/90 sticky top-0 font-bold uppercase text-[10px] z-10">
+                      <tr>
+                        <th className="p-2.5 bg-slate-100">ID</th>
+                        <th className="p-2.5 bg-slate-100">የተማሪ ስም</th>
+                        {criteria.map((it, idx) => {
+                          const color = getCriterionColor(idx);
+                          return (
+                            <th
+                              key={it.id}
+                              className={`p-2.5 text-center min-w-[75px] ${color.headerBg} border-b-2 ${color.headerBorder}`}
+                            >
+                              <span className="block font-bold truncate max-w-[80px]">{it.label}</span>
+                              <span className="block text-[9px] font-mono font-black">({it.max}%)</span>
+                            </th>
+                          );
+                        })}
+                        <th className="p-2.5 text-center bg-emerald-100/70 text-emerald-950 border-b-2 border-emerald-500 font-black">
+                          ድምር ({totalWeight}%)
+                        </th>
+                        <th className="p-2.5 text-center bg-amber-100/70 text-amber-950 border-b-2 border-amber-500 font-black">
+                          ፊደል
+                        </th>
+                        <th className="p-2.5 text-center bg-slate-100 text-slate-800">ነጥብ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {adminEnrolledStudents.map((s) => {
+                        const g = adminLocalGrades[s.uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+                        const eff = getEffectiveGradeValues(g, criteria);
+
+                        return (
+                          <tr key={s.uid} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-2.5 font-mono font-bold text-slate-800">{s.id}</td>
+                            <td className="p-2.5 font-bold text-slate-900">{s.name}</td>
+                            {criteria.map((it, idx) => {
+                              const score = getCriterionScore(g, it.id, idx);
+                              const color = getCriterionColor(idx);
+                              return (
+                                <td key={it.id} className="p-1.5 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={it.max}
+                                    step="0.5"
+                                    placeholder="—"
+                                    value={score === 0 ? '' : score}
+                                    onChange={(e) =>
+                                      handleAdminScoreChange(s.uid, it.id, e.target.value, it.max, idx)
+                                    }
+                                    className={`w-14 px-1 py-0.5 text-center font-mono text-xs border ${color.border} rounded bg-white placeholder:text-slate-300 shadow-2xs`}
+                                    title={`${it.label} (ከ ${it.max}%)`}
+                                  />
+                                </td>
+                              );
+                            })}
+                            <td className="p-2.5 text-center font-black font-mono text-emerald-800">
+                              {eff.hasAny ? eff.total : '—'}
+                            </td>
+                            <td className="p-2.5 text-center font-black text-amber-700">
+                              {eff.hasAny ? eff.letter : '—'}
+                            </td>
+                            <td className="p-2.5 text-center font-bold font-mono">
+                              {eff.hasAny ? eff.points.toFixed(2) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
@@ -1257,6 +1534,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           showNotify={showNotify || (() => {})}
           userRoleTitle="ዋና አድሚን"
           churchLogo={churchLogo}
+        />
+      )}
+
+      {/* Excel Upload Modal for Admin */}
+      {isExcelUploadOpen && adminSelectedCourse && (
+        <ExcelUploadModal
+          course={adminSelectedCourse}
+          students={adminEnrolledStudents}
+          currentYear={currentYear}
+          currentSemester={currentSemester}
+          onApplyGrades={handleApplyAdminImportedScores}
+          onClose={() => setIsExcelUploadOpen(false)}
+          showNotify={showNotify || (() => {})}
+        />
+      )}
+
+      {/* Official PDF Grade Report Modal for Admin */}
+      {isPdfModalOpen && adminSelectedCourse && (
+        <CourseGradeReportPdfModal
+          course={adminSelectedCourse}
+          students={adminEnrolledStudents}
+          grades={adminLocalGrades}
+          currentYear={currentYear}
+          currentSemester={currentSemester}
+          officialConfig={officialConfig}
+          churchLogo={churchLogo}
+          onClose={() => setIsPdfModalOpen(false)}
         />
       )}
     </div>

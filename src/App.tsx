@@ -917,6 +917,7 @@ export default function App() {
                 officialConfig={officialConfig}
                 onSaveOfficialConfig={handleSaveOfficialConfig}
                 onClearAllGrades={handleClearAllGradesToBlank}
+                onSaveGrades={(updated) => setGrades(updated)}
               />
             )}
 
@@ -963,6 +964,9 @@ export default function App() {
                 onSelectPrintTranscript={(s) => setTranscriptStudent(s)}
                 onDeleteStudent={handleDeleteStudent}
                 showNotify={showNotification}
+                onSaveGrades={(updated) => setGrades(updated)}
+                officialConfig={officialConfig}
+                churchLogo={churchLogo}
               />
             )}
 
@@ -977,6 +981,10 @@ export default function App() {
                 onSaveGrades={(updated) => setGrades(updated)}
                 showNotify={showNotification}
                 onUpdateCourse={handleSaveCourse}
+                userRole={currentUser.role}
+                teachers={teachers}
+                churchLogo={churchLogo}
+                officialConfig={officialConfig}
               />
             )}
 

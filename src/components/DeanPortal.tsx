@@ -15,12 +15,17 @@ import {
   Eye,
   Printer,
   UserPlus,
-  Save
+  Save,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Course, GradeBreakdown, OfficialSignaturesConfig, ProgramType, Student } from '../types.ts';
 import { calculateGradeDetails, calculateStudentGPA, getCourseAssessmentConfig, getCourseAssessmentItems, getCriterionScore, getEffectiveGradeValues, getGradeKey } from '../utils/gradeCalculations.ts';
 import { getCriterionColor } from './TeacherPortal.tsx';
 import { OfficialSignaturesManager } from './OfficialSignaturesManager.tsx';
+import { ExcelUploadModal } from './ExcelUploadModal.tsx';
+import { CourseGradeReportPdfModal } from './CourseGradeReportPdfModal.tsx';
+import { exportCourseGradesToExcel, downloadCourseGradeTemplateExcel } from '../utils/excelUtils.ts';
 
 interface DeanPortalProps {
   currentYear: string;
@@ -89,6 +94,8 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
   // Grade supervision view & edit
   const [superviseCourseId, setSuperviseCourseId] = useState<string>(courses[0]?.id || '');
   const [editingGradeMatrix, setEditingGradeMatrix] = useState<Record<string, GradeBreakdown>>({});
+  const [isExcelUploadOpen, setIsExcelUploadOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
 
   // Sync supervision matrix when course changes
   React.useEffect(() => {
@@ -180,6 +187,45 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
     });
     onSaveGrades(updated);
     showNotify('የተስተካከሉት ውጤቶች በስኬት ተመዝግበዋል!', 'success');
+  };
+
+  // Export Dean supervised grades to Excel (.xlsx)
+  const handleExportDeanExcel = () => {
+    if (!selectedSupervisedCourse) return;
+    exportCourseGradesToExcel(
+      selectedSupervisedCourse,
+      supervisedStudents,
+      editingGradeMatrix,
+      currentYear,
+      currentSemester
+    );
+    showNotify(`የ${selectedSupervisedCourse.name} ውጤት ኤክሴል ሰነድ (.xlsx) በስኬት ወርዷል!`, 'success');
+  };
+
+  // Apply imported Excel scores to Dean supervised grades
+  const handleApplyDeanImportedScores = (scoresByUid: Record<string, Record<string, number>>) => {
+    if (!selectedSupervisedCourse) return;
+    setEditingGradeMatrix((prev) => {
+      const next = { ...prev };
+      Object.entries(scoresByUid).forEach(([uid, newScores]) => {
+        const current = next[uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+        const currentScores = current.scores ? { ...current.scores } : {};
+        Object.entries(newScores).forEach(([itemId, scoreVal]) => {
+          currentScores[itemId] = scoreVal;
+        });
+        next[uid] = {
+          ...current,
+          scores: currentScores,
+          p1: currentScores['p1'] ?? currentScores['crit_1'] ?? current.p1,
+          p2: currentScores['p2'] ?? currentScores['crit_2'] ?? current.p2,
+          mid: currentScores['mid'] ?? currentScores['crit_3'] ?? current.mid,
+          final: currentScores['final'] ?? currentScores['crit_4'] ?? current.final,
+          att: currentScores['att'] ?? currentScores['crit_5'] ?? current.att
+        };
+      });
+      return next;
+    });
+    showNotify('ውጤቶች ከኤክሴል ተጭነዋል! የተጫኑትን ውጤቶች ለመመዝገብ «ለውጦችን መዝግብ» የሚለውን ይጫኑ', 'info');
   };
 
   // Download course grades as CSV
@@ -579,6 +625,36 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
                 ))}
               </select>
 
+              <button
+                type="button"
+                onClick={() => setIsExcelUploadOpen(true)}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-400 text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="ውጤት ከማይክሮሶፍት ኤክሴል (.xlsx / .csv) ለመጫን"
+              >
+                <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                <span>ኤክሴል ጫን (Upload)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportDeanExcel}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-400 text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="የዚህን ኮርስ ውጤት በኤክሴል (.xlsx) ለማውረድ"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                <span>ኤክሴል አውርድ (.xlsx)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(true)}
+                className="bg-cyan-50 hover:bg-cyan-100 text-cyan-950 border border-cyan-300 text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="ይፋዊ የውጤት ሰነድ ለማተም ወይም በፒዲኤፍ (PDF) ለማስቀመጥ"
+              >
+                <Printer className="w-3.5 h-3.5 text-cyan-700" />
+                <span>ይፋዊ ሰነድ (PDF)</span>
+              </button>
+
               {onClearAllGrades && (
                 <button
                   type="button"
@@ -966,6 +1042,33 @@ export const DeanPortal: React.FC<DeanPortalProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Excel Upload Modal for Dean */}
+      {isExcelUploadOpen && selectedSupervisedCourse && (
+        <ExcelUploadModal
+          course={selectedSupervisedCourse}
+          students={supervisedStudents}
+          currentYear={currentYear}
+          currentSemester={currentSemester}
+          onApplyGrades={handleApplyDeanImportedScores}
+          onClose={() => setIsExcelUploadOpen(false)}
+          showNotify={showNotify}
+        />
+      )}
+
+      {/* Official PDF Grade Report Modal for Dean */}
+      {isPdfModalOpen && selectedSupervisedCourse && (
+        <CourseGradeReportPdfModal
+          course={selectedSupervisedCourse}
+          students={supervisedStudents}
+          grades={editingGradeMatrix}
+          currentYear={currentYear}
+          currentSemester={currentSemester}
+          officialConfig={officialConfig}
+          churchLogo={churchLogo}
+          onClose={() => setIsPdfModalOpen(false)}
+        />
       )}
     </div>
   );

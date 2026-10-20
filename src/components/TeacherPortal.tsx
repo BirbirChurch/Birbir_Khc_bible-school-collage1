@@ -20,9 +20,25 @@ import {
   ChevronDown,
   ChevronUp,
   LayoutGrid,
-  MoveHorizontal
+  MoveHorizontal,
+  FileSpreadsheet,
+  Upload,
+  Download,
+  Printer,
+  FileText,
+  Shield,
+  Award,
+  UserCheck
 } from 'lucide-react';
-import { AssessmentCriterionItem, Course, CourseAssessmentConfig, GradeBreakdown, Student } from '../types.ts';
+import {
+  AssessmentCriterionItem,
+  Course,
+  CourseAssessmentConfig,
+  GradeBreakdown,
+  OfficialSignaturesConfig,
+  Student,
+  UserRole
+} from '../types.ts';
 import {
   calculateGradeDetails,
   DEFAULT_ASSESSMENT_CONFIG,
@@ -34,6 +50,9 @@ import {
   getGradeKey
 } from '../utils/gradeCalculations.ts';
 import { OFFICIAL_GRADING_SCALE } from '../data/initialData.ts';
+import { exportCourseGradesToExcel, downloadCourseGradeTemplateExcel } from '../utils/excelUtils.ts';
+import { ExcelUploadModal } from './ExcelUploadModal.tsx';
+import { CourseGradeReportPdfModal } from './CourseGradeReportPdfModal.tsx';
 
 // Dynamic Color Palette for criteria columns and cards
 export const CRITERIA_COLORS = [
@@ -61,6 +80,10 @@ interface TeacherPortalProps {
   onSaveGrades: (updatedGrades: Record<string, GradeBreakdown>) => void;
   showNotify: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
   onUpdateCourse?: (course: Course) => void;
+  userRole?: UserRole;
+  teachers?: string[];
+  churchLogo?: string;
+  officialConfig?: OfficialSignaturesConfig;
 }
 
 export const TeacherPortal: React.FC<TeacherPortalProps> = ({
@@ -72,14 +95,30 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   currentSemester,
   onSaveGrades,
   showNotify,
-  onUpdateCourse
+  onUpdateCourse,
+  userRole = 'TEACHER',
+  teachers = [],
+  churchLogo,
+  officialConfig
 }) => {
-  const teacherCourses = courses.filter((c) => c.teacher === teacherName);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(teacherCourses[0]?.id || '');
+  const isElevatedRole = userRole === 'ADMIN' || userRole === 'DEAN' || userRole === 'REGISTRAR';
+  const [selectedTeacherFilter, setSelectedTeacherFilter] = useState<string>('ALL');
+
+  const accessibleCourses = isElevatedRole
+    ? selectedTeacherFilter === 'ALL'
+      ? courses
+      : courses.filter((c) => c.teacher === selectedTeacherFilter)
+    : courses.filter((c) => c.teacher === teacherName);
+
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(
+    accessibleCourses[0]?.id || courses[0]?.id || ''
+  );
   const [localGrades, setLocalGrades] = useState<Record<string, GradeBreakdown>>({});
 
-  // Assessment Scheme Modal State & Dynamic criteria list
+  // Assessment Scheme & Export/Import Modal States
   const [isSchemeModalOpen, setIsSchemeModalOpen] = useState(false);
+  const [isExcelUploadOpen, setIsExcelUploadOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [isInlineEditorOpen, setIsInlineEditorOpen] = useState(true);
   const [modalViewMode, setModalViewMode] = useState<'horizontal' | 'grid'>('horizontal');
   const inlineScrollRef = useRef<HTMLDivElement>(null);
@@ -93,10 +132,10 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   };
 
   useEffect(() => {
-    if (teacherCourses.length > 0 && (!selectedCourseId || !teacherCourses.some((c) => c.id === selectedCourseId))) {
-      setSelectedCourseId(teacherCourses[0].id);
+    if (accessibleCourses.length > 0 && (!selectedCourseId || !accessibleCourses.some((c) => c.id === selectedCourseId))) {
+      setSelectedCourseId(accessibleCourses[0].id);
     }
-  }, [teacherCourses, selectedCourseId]);
+  }, [accessibleCourses, selectedCourseId]);
 
   const activeCourse = courses.find((c) => c.id === selectedCourseId);
   const activeItems = getCourseAssessmentItems(activeCourse);
@@ -346,6 +385,45 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
     setEditingItems(DEFAULT_ASSESSMENT_ITEMS.map((item) => ({ ...item })));
   };
 
+  // Export grades to Excel (.xlsx)
+  const handleExportExcel = () => {
+    if (!activeCourse) return;
+    exportCourseGradesToExcel(activeCourse, students, localGrades, currentYear, currentSemester);
+    showNotify(`የ${activeCourse.name} ውጤት ኤክሴል ሰነድ (.xlsx) በስኬት ወርዷል!`, 'success');
+  };
+
+  // Download pre-filled template
+  const handleDownloadTemplate = () => {
+    if (!activeCourse) return;
+    downloadCourseGradeTemplateExcel(activeCourse, students);
+    showNotify(`የ${activeCourse.name} የውጤት ማስገቢያ ኤክሴል አብነት ወርዷል!`, 'success');
+  };
+
+  // Apply imported scores from ExcelUploadModal
+  const handleApplyImportedScores = (scoresByUid: Record<string, Record<string, number>>) => {
+    if (!activeCourse) return;
+    setLocalGrades((prev) => {
+      const next = { ...prev };
+      Object.entries(scoresByUid).forEach(([uid, newScores]) => {
+        const current = next[uid] || { p1: 0, p2: 0, mid: 0, final: 0, att: 0 };
+        const currentScores = current.scores ? { ...current.scores } : {};
+        Object.entries(newScores).forEach(([itemId, scoreVal]) => {
+          currentScores[itemId] = scoreVal;
+        });
+        next[uid] = {
+          ...current,
+          scores: currentScores,
+          p1: currentScores['p1'] ?? currentScores['crit_1'] ?? current.p1,
+          p2: currentScores['p2'] ?? currentScores['crit_2'] ?? current.p2,
+          mid: currentScores['mid'] ?? currentScores['crit_3'] ?? current.mid,
+          final: currentScores['final'] ?? currentScores['crit_4'] ?? current.final,
+          att: currentScores['att'] ?? currentScores['crit_5'] ?? current.att
+        };
+      });
+      return next;
+    });
+  };
+
   // Handle changing numeric criterion for a student
   const handleCriterionScoreChange = (
     studentUid: string,
@@ -510,42 +588,79 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
       {/* Top Banner */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <GraduationCap className="w-7 h-7 text-emerald-800" />
-            <span>የመምህራን ውጤት መሙያ ገጽ</span>
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+              <GraduationCap className="w-7 h-7 text-emerald-800" />
+              <span>የመምህራን ውጤት መሙያ ገጽ</span>
+            </h2>
+            {isElevatedRole && (
+              <span className="text-xs bg-amber-100 text-amber-950 border border-amber-300 px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-2xs">
+                <Shield className="w-3.5 h-3.5 text-amber-700" />
+                <span>
+                  {userRole === 'ADMIN'
+                    ? 'የአድሚን ጠቅላይ ቁጥጥር'
+                    : userRole === 'DEAN'
+                    ? 'የዋና ዲን ይፋዊ ቁጥጥር'
+                    : 'የሬጅስትራር ይፋዊ ቁጥጥር'}
+                </span>
+              </span>
+            )}
+          </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            የትምህርት ዘመን {currentYear} ዓ.ም ({currentSemester}ኛ ሴሚስተር)
+            የትምህርት ዘመን {currentYear} ዓ.ም ({currentSemester}ኛ ሴሚስተር) {isElevatedRole && '— ሁሉንም መምህራንና ኮርሶች ማስተዳደር ይችላሉ'}
           </p>
         </div>
 
-        {/* Course selection dropdown */}
-        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-300 rounded-2xl px-3.5 py-2">
-          <BookOpen className="w-4 h-4 text-emerald-800" />
-          <label className="text-xs font-bold text-emerald-900">የሚያስተምሩት ኮርስ:</label>
-          <select
-            value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="text-xs font-bold bg-transparent text-emerald-950 focus:outline-none cursor-pointer"
-          >
-            {teacherCourses.length === 0 ? (
-              <option value="">የተመደበ ኮርስ የለም</option>
-            ) : (
-              teacherCourses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  [{c.program}] {c.name}
-                </option>
-              ))
-            )}
-          </select>
+        {/* Teacher & Course selection dropdowns */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Teacher selector for Admin/Dean/Registrar */}
+          {isElevatedRole && (
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-2xl px-3 py-2 text-xs shadow-2xs">
+              <UserCheck className="w-4 h-4 text-emerald-700" />
+              <label className="font-bold text-slate-700">መምህር ምረጥ:</label>
+              <select
+                value={selectedTeacherFilter}
+                onChange={(e) => setSelectedTeacherFilter(e.target.value)}
+                className="font-bold bg-transparent text-slate-900 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">ሁሉም መምህራን ({courses.length} ኮርሶች)</option>
+                {teachers.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Course selection dropdown */}
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-300 rounded-2xl px-3.5 py-2 shadow-2xs">
+            <BookOpen className="w-4 h-4 text-emerald-800" />
+            <label className="text-xs font-bold text-emerald-900">ኮርስ ይምረጡ:</label>
+            <select
+              value={selectedCourseId}
+              onChange={(e) => setSelectedCourseId(e.target.value)}
+              className="text-xs font-bold bg-transparent text-emerald-950 focus:outline-none cursor-pointer"
+            >
+              {accessibleCourses.length === 0 ? (
+                <option value="">የተመደበ ኮርስ የለም</option>
+              ) : (
+                accessibleCourses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    [{c.program}] {c.name} {isElevatedRole ? `— (${c.teacher})` : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
         </div>
       </div>
 
-      {teacherCourses.length === 0 ? (
+      {accessibleCourses.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80">
           <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
           <h3 className="text-base font-bold text-slate-800">ምንም የተመደበ ኮርስ አልተገኘም</h3>
-          <p className="text-xs text-slate-500 mt-1">ዋና ዲን ኮርስ ሲመድቡሎት በዚህ ገጽ ላይ ተዘርዝረው ይታያሉ።</p>
+          <p className="text-xs text-slate-500 mt-1">ዋና ዲን ኮርስ ሲመድቡ በዚህ ገጽ ላይ ተዘርዝረው ይታያሉ።</p>
         </div>
       ) : (
         <>
@@ -725,6 +840,40 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   <span>ሙሉ መስኮት</span>
                 </button>
 
+                {/* Excel Upload Button (ኤክሴል መጫኛ) */}
+                <button
+                  type="button"
+                  onClick={() => setIsExcelUploadOpen(true)}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-400 text-xs px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="ውጤት ከማይክሮሶፍት ኤክሴል (.xlsx / .csv) ለመጫን"
+                >
+                  <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ኤክሴል ጫን (Upload)</span>
+                </button>
+
+                {/* Excel Download Button (ኤክሴል ማውረጃ) */}
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-400 text-xs px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="የዚህን ኮርስ ውጤት በኤክሴል (.xlsx) ለማውረድ"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ኤክሴል አውርድ (.xlsx)</span>
+                </button>
+
+                {/* Official PDF / Print Button (ይፋዊ ሰነድ / ፕዴፍ) */}
+                <button
+                  type="button"
+                  onClick={() => setIsPdfModalOpen(true)}
+                  className="bg-cyan-50 hover:bg-cyan-100 text-cyan-950 border border-cyan-300 text-xs px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="ይፋዊ የውጤት ሰነድ ለማተም ወይም በፒዲኤፍ (PDF) ለማስቀመጥ"
+                >
+                  <Printer className="w-3.5 h-3.5 text-cyan-700" />
+                  <span>ይፋዊ ሰነድ (PDF)</span>
+                </button>
+
+                {/* Save All Button */}
                 <button
                   onClick={handleSaveAll}
                   className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2 rounded-xl font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
@@ -1252,13 +1401,40 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 የክፍሉ አማካይ ውጤት: <strong className="text-slate-800">{classAverage}%</strong> ({gradedCount} ከተማሪዎች ተሞልቷል)
               </span>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="bg-white hover:bg-emerald-50 text-emerald-950 border border-emerald-300 text-xs px-3.5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="ኤክሴል አውርድ"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ኤክሴል (.xlsx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsExcelUploadOpen(true)}
+                  className="bg-white hover:bg-emerald-50 text-emerald-950 border border-emerald-300 text-xs px-3.5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="ኤክሴል ጫን"
+                >
+                  <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ኤክሴል ጫን</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPdfModalOpen(true)}
+                  className="bg-white hover:bg-cyan-50 text-cyan-950 border border-cyan-300 text-xs px-3.5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="ይፋዊ ሰነድ / ፕዴፍ አትም"
+                >
+                  <Printer className="w-3.5 h-3.5 text-cyan-700" />
+                  <span>ይፋዊ ሰነድ (PDF)</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleClearCourse}
                   className="bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-xs px-4 py-2.5 rounded-xl font-bold border border-slate-300 transition-colors cursor-pointer"
                 >
-                  ውጤቶችን አጽዳ / ባዶ አድርግ
+                  ውጤቶችን አጽዳ
                 </button>
                 <button
                   onClick={handleSaveAll}
@@ -1660,6 +1836,33 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL: Excel Upload / Import */}
+      {isExcelUploadOpen && activeCourse && (
+        <ExcelUploadModal
+          course={activeCourse}
+          students={students}
+          currentYear={currentYear}
+          currentSemester={currentSemester}
+          onApplyGrades={handleApplyImportedScores}
+          onClose={() => setIsExcelUploadOpen(false)}
+          showNotify={showNotify}
+        />
+      )}
+
+      {/* MODAL: Official Course Grade Report PDF / Printable View */}
+      {isPdfModalOpen && activeCourse && (
+        <CourseGradeReportPdfModal
+          course={activeCourse}
+          students={students}
+          grades={localGrades}
+          currentYear={currentYear}
+          currentSemester={currentSemester}
+          churchLogo={churchLogo}
+          officialConfig={officialConfig}
+          onClose={() => setIsPdfModalOpen(false)}
+        />
       )}
     </div>
   );

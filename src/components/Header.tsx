@@ -112,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex flex-wrap items-center gap-1 bg-emerald-950 p-1 rounded-xl border border-emerald-700/60">
                 <button
                   onClick={() => onAdminChangeView('ADMIN')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                     adminActiveView === 'ADMIN'
                       ? 'bg-amber-500 text-slate-950 shadow-sm'
                       : 'text-slate-300 hover:text-white hover:bg-emerald-900'
@@ -122,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
                 <button
                   onClick={() => onAdminChangeView('DEAN')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                     adminActiveView === 'DEAN'
                       ? 'bg-amber-500 text-slate-950 shadow-sm'
                       : 'text-slate-300 hover:text-white hover:bg-emerald-900'
@@ -132,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
                 <button
                   onClick={() => onAdminChangeView('REGISTRAR')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                     adminActiveView === 'REGISTRAR'
                       ? 'bg-amber-500 text-slate-950 shadow-sm'
                       : 'text-slate-300 hover:text-white hover:bg-emerald-900'
@@ -142,23 +142,87 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
                 <button
                   onClick={() => onAdminChangeView('TEACHER')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                     adminActiveView === 'TEACHER'
                       ? 'bg-amber-500 text-slate-950 shadow-sm'
                       : 'text-slate-300 hover:text-white hover:bg-emerald-900'
                   }`}
                 >
-                  የመምህራን ገጽ
+                  የመምህራን ውጤት (Excel/PDF)
                 </button>
                 <button
                   onClick={() => onAdminChangeView('STUDENT')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                     adminActiveView === 'STUDENT'
                       ? 'bg-amber-500 text-slate-950 shadow-sm'
                       : 'text-slate-300 hover:text-white hover:bg-emerald-900'
                   }`}
                 >
                   የተማሪዎች ገጽ
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Chief Dean View Switcher Bar */}
+          {currentUser && currentUser.role === 'DEAN' && (
+            <div className="pb-3 pt-1 border-t border-emerald-800/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                <Award className="w-4 h-4" />
+                <span>የዋና ዲን ይፋዊ ቁጥጥር (የውጤት ማስገቢያ፣ ኤክሴልና ፒዲኤፍ ተፈቅዷል):</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1 bg-emerald-950 p-1 rounded-xl border border-emerald-700/60">
+                <button
+                  onClick={() => onAdminChangeView('DEAN')}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    adminActiveView === 'DEAN'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-emerald-900'
+                  }`}
+                >
+                  የዋና ዲን ቢሮ
+                </button>
+                <button
+                  onClick={() => onAdminChangeView('TEACHER')}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    adminActiveView === 'TEACHER'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-emerald-900'
+                  }`}
+                >
+                  የመምህራን ውጤት ማስገቢያ (ኤክሴል/PDF)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Registrar View Switcher Bar */}
+          {currentUser && currentUser.role === 'REGISTRAR' && (
+            <div className="pb-3 pt-1 border-t border-emerald-800/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                <User className="w-4 h-4" />
+                <span>የሬጅስትራር ጽሕፈት ቤት (የውጤት ማስገቢያ፣ ኤክሴልና ፒዲኤፍ ተፈቅዷል):</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1 bg-emerald-950 p-1 rounded-xl border border-emerald-700/60">
+                <button
+                  onClick={() => onAdminChangeView('REGISTRAR')}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    adminActiveView === 'REGISTRAR'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-emerald-900'
+                  }`}
+                >
+                  የሬጅስትራር ቢሮ
+                </button>
+                <button
+                  onClick={() => onAdminChangeView('TEACHER')}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    adminActiveView === 'TEACHER'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-emerald-900'
+                  }`}
+                >
+                  የመምህራን ውጤት ማስገቢያ (ኤክሴል/PDF)
                 </button>
               </div>
             </div>
